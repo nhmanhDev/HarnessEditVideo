@@ -1,0 +1,25 @@
+name: Python
+
+on:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Cài ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Cài môi trường
+        run: uv sync --extra dev --python 3.12
+      - name: Lint
+        run: uv run ruff check src tests
+      - name: Kiểm định dạng
+        run: uv run ruff format --check src tests
+      - name: Test
+        run: uv run pytest -q
