@@ -137,12 +137,15 @@ def recenter(
     step: float = 0.25,
     motion: list[tuple[float, float]] | None = None,
     motion_ref: float = 3.0,
+    drift=None,
+    max_drift: float = 12.0,
 ) -> tuple[float, float]:
-    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ MỌI khung đều có sản phẩm và đứng yên.
+    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong [lo, hi] về chỗ MỌI khung đều có sản phẩm và đứng yên.
 
-    Điểm của cửa sổ là mức hiện diện của khung xấu nhất trong cửa sổ, chia cho (1 + chuyển động lớn nhất /
-    motion_ref). Một khung trống hoặc đang trượt là đủ để bị chê, nên xét khung xấu nhất chứ không phải trung bình.
-    Khi điểm bằng nhau chọn dịch ít nhất; cửa sổ không đổi nếu không có chỗ tốt hơn.
+    Điểm của cửa sổ là mức hiện diện của khung xấu nhất, chia cho (1 + chuyển động lớn nhất / motion_ref).
+    Một khung trống hoặc đang trượt là đủ để bị chê nên xét khung xấu nhất chứ không phải trung bình.
+    `drift(a, b, c, d)` đo độ lệch hình giữa cửa sổ [a, b] và [c, d]; cửa sổ mới lệch quá `max_drift` bị loại, để không
+    nhảy sang món khác trong cùng clip (chữ của model viết cho món đã chọn). Khi điểm bằng nhau chọn dịch ít nhất.
     """
     if not detail:
         return start, end
@@ -165,6 +168,8 @@ def recenter(
     for k in range(1, int(max_shift / step) + 1):
         for s in (start - k * step, start + k * step):
             if s < lo or s + length > hi:
+                continue
+            if drift is not None and drift(start, end, s, s + length) > max_drift:
                 continue
             sc = score(s)
             if sc > best + 1e-6:

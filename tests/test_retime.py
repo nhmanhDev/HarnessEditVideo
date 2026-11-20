@@ -97,3 +97,20 @@ def test_recenter_prefers_a_settled_window_over_a_sliding_one():
     motion = [(i * 0.5, 15.0 if 4.0 <= i * 0.5 < 6.0 else 1.0) for i in range(30)]
     s, e = recenter(4.2, 6.4, detail, empty_threshold(detail), lo=0.0, hi=15.0, motion=motion)
     assert s > 4.2  # dời về phía lúc sản phẩm đã yên vị (dịch tối đa 1,2 giây)
+
+
+def test_recenter_rejects_a_shift_that_jumps_to_a_different_item():
+    from edit_agent.retime import recenter
+
+    # Sản phẩm A hiện ở giây 3,5–4,5 (ngắn hơn cửa sổ), sản phẩm B ở giây 6–9. Cửa sổ ban đầu đặt ở A nhưng có khung trống ở cuối.
+    detail = [(i * 0.5, 20.0 if (3.5 <= i * 0.5 < 4.5 or 6.0 <= i * 0.5 < 9.0) else 3.0) for i in range(30)]
+    thresh = empty_threshold(detail)
+
+    def drift(a, b, c, d):
+        # Cửa sổ nằm trong vùng B (từ giây 6) coi như món khác hẳn.
+        return 30.0 if c >= 5.6 else 1.0
+
+    free = recenter(3.4, 5.6, detail, thresh, 0.0, 15.0, max_shift=3.0)
+    guarded = recenter(3.4, 5.6, detail, thresh, 0.0, 15.0, max_shift=3.0, drift=drift)
+    assert free[0] >= 5.6  # không có ràng buộc thì nhảy sang món B
+    assert guarded[0] < 5.6  # có ràng buộc thì ở lại món A

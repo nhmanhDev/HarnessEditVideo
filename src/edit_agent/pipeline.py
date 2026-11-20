@@ -15,6 +15,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 from .clips import combine_clips
 from .config import Settings, require_tool
 from .intake import fetch_folder, fetch_source, is_folder_input, new_job_dir
@@ -108,6 +110,7 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
     _write_json(job_dir / "detail.json", [[round(t, 2), round(s, 3)] for t, s in presence])
     # Chuyển động theo thời gian: để dịch cửa sổ về lúc sản phẩm đã yên vị, không phải lúc đang trượt vào hoặc ra.
     _write_json(job_dir / "motion.json", [[round(t, 2), round(m, 3)] for t, m in motion_scores(scores, sigs)])
+    np.save(job_dir / "sigs.npy", sigs)
     wins = pick_windows(presence, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
     # Đoạn gợi ý không được vượt ranh giới clip.
     candidates = [w.to_dict() for w in wins if not any(w.start < b < w.end for b in boundaries)]
@@ -179,8 +182,10 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     detail = [(t, s) for t, s in json.loads(detail_file.read_text(encoding="utf-8"))] if detail_file.exists() else None
     motion_file = ctx.job_dir / "motion.json"
     motion = [(t, m) for t, m in json.loads(motion_file.read_text(encoding="utf-8"))] if motion_file.exists() else None
+    sigs_file = ctx.job_dir / "sigs.npy"
+    sigs = np.load(sigs_file) if sigs_file.exists() else None
     policy: PolicyResult = apply_policy(
-        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail, motion
+        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail, motion, sigs
     )
 
     voice_files: list[tuple[float, str]] = []

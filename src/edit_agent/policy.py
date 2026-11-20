@@ -8,7 +8,10 @@ Nguyên tắc chính:
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
+
+import numpy as np
 
 from .retime import Seg, empty_threshold, recenter, remap_time, snap, split_indexed, trim_empty_edges
 from .spec import EditPlan, JobSpec, JobType, Music, Segment, TextOverlay, VoiceLine
@@ -113,6 +116,23 @@ def uncovered_seconds(voice_lines: list[VoiceLine], output_seconds: float) -> fl
     return max(0.0, output_seconds - covered)
 
 
+def _make_drift(detail: list[tuple[float, float]], sigs):
+    """Hàm đo độ lệch hình giữa hai cửa sổ thời gian, từ chữ ký hình theo từng mẫu. None nếu thiếu chữ ký."""
+    if sigs is None or not len(detail):
+        return None
+    times = [t for t, _ in detail]
+
+    def window(a: float, b: float):
+        i0, i1 = bisect.bisect_left(times, a), bisect.bisect_right(times, b)
+        return sigs[i0:i1].mean(axis=0) if i1 > i0 else None
+
+    def drift(a: float, b: float, c: float, d: float) -> float:
+        wa, wc = window(a, b), window(c, d)
+        return 0.0 if wa is None or wc is None else float(np.abs(wa - wc).mean())
+
+    return drift
+
+
 def apply_policy(
     spec: JobSpec,
     plan: EditPlan,
@@ -122,6 +142,7 @@ def apply_policy(
     boundaries: list[float] | None = None,
     detail: list[tuple[float, float]] | None = None,
     motion: list[tuple[float, float]] | None = None,
+    sigs=None,
 ) -> PolicyResult:
     warnings: list[str] = []
     planned: list[tuple[int, float]] = []
@@ -139,12 +160,13 @@ def apply_policy(
         # Cắt rìa khung trống (rèm, tay đang kéo đồ đi) ở đầu và cuối mỗi đoạn.
         thresh = empty_threshold(detail)
         clip_edges = [0.0, *sorted(boundaries or []), src_duration]
+        drift = _make_drift(detail, sigs)
         trimmed = []
         for i, st, en in items:
             # Trước hết dịch cửa sổ trong cùng clip về chỗ sản phẩm hiện rõ (giữ nguyên độ dài đoạn).
             lo = max(e for e in clip_edges if e <= st + 1e-6)
             hi = min(e for e in clip_edges if e >= en - 1e-6)
-            ms, me = recenter(st, en, detail, thresh, lo, hi, motion=motion)
+            ms, me = recenter(st, en, detail, thresh, lo, hi, max_shift=2.5, motion=motion, drift=drift)
             if (ms, me) != (st, en):
                 warnings.append(f"Dịch đoạn {st:.1f}–{en:.1f}s sang {ms:.1f}–{me:.1f}s để sản phẩm hiện rõ")
             # Còn rìa trống thì cắt bớt.
