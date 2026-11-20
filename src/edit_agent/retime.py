@@ -118,3 +118,45 @@ def snap(t: float, points: list[float], tol: float) -> float:
         return t
     best = min(points, key=lambda p: abs(p - t))
     return best if abs(best - t) <= tol else t
+
+
+def recenter(
+    start: float,
+    end: float,
+    detail: list[tuple[float, float]],
+    thresh: float,
+    lo: float,
+    hi: float,
+    max_shift: float = 1.2,
+    step: float = 0.25,
+) -> tuple[float, float]:
+    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ sản phẩm hiện rõ nhất.
+
+    Điểm của một cửa sổ là độ hiện diện trung bình, bị phạt nặng nếu đầu hoặc cuối cửa sổ là khung trống.
+    Chọn dịch ít nhất khi điểm bằng nhau. Cửa sổ không đổi nếu không có chỗ tốt hơn.
+    """
+    if not detail:
+        return start, end
+    length = end - start
+    times = [t for t, _ in detail]
+
+    def level(t0: float, t1: float) -> float:
+        i0, i1 = bisect.bisect_left(times, t0), bisect.bisect_right(times, t1)
+        vals = [d for _, d in detail[i0:i1]] or [_detail_at(detail, times, (t0 + t1) / 2)]
+        return float(np.mean(vals))
+
+    def score(s: float) -> float:
+        base = level(s, s + length)
+        edges_ok = level(s, s + 0.5) >= thresh and level(s + length - 0.5, s + length) >= thresh
+        return base if edges_ok else base * 0.5
+
+    best_s, best = start, score(start)
+    n = int(max_shift / step)
+    for k in range(1, n + 1):
+        for s in (start - k * step, start + k * step):
+            if s < lo or s + length > hi:
+                continue
+            sc = score(s)
+            if sc > best + 1e-6:
+                best_s, best = s, sc
+    return best_s, best_s + length

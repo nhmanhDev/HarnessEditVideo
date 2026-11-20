@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .retime import Seg, empty_threshold, remap_time, snap, split_indexed, trim_empty_edges
+from .retime import Seg, empty_threshold, recenter, remap_time, snap, split_indexed, trim_empty_edges
 from .spec import EditPlan, JobSpec, JobType, Music, Segment, TextOverlay, VoiceLine
 from .transcribe import TranscriptSegment
 
@@ -137,11 +137,19 @@ def apply_policy(
     if detail:
         # Cắt rìa khung trống (rèm, tay đang kéo đồ đi) ở đầu và cuối mỗi đoạn.
         thresh = empty_threshold(detail)
+        clip_edges = [0.0, *sorted(boundaries or []), src_duration]
         trimmed = []
         for i, st, en in items:
-            ns, ne = trim_empty_edges(st, en, detail, thresh)
-            if (ns, ne) != (st, en):
-                warnings.append(f"Cắt rìa trống đoạn {st:.1f}–{en:.1f}s còn {ns:.1f}–{ne:.1f}s")
+            # Trước hết dịch cửa sổ trong cùng clip về chỗ sản phẩm hiện rõ (giữ nguyên độ dài đoạn).
+            lo = max(e for e in clip_edges if e <= st + 1e-6)
+            hi = min(e for e in clip_edges if e >= en - 1e-6)
+            ms, me = recenter(st, en, detail, thresh, lo, hi)
+            if (ms, me) != (st, en):
+                warnings.append(f"Dịch đoạn {st:.1f}–{en:.1f}s sang {ms:.1f}–{me:.1f}s để sản phẩm hiện rõ")
+            # Còn rìa trống thì cắt bớt.
+            ns, ne = trim_empty_edges(ms, me, detail, thresh, min_len=1.6)
+            if (ns, ne) != (ms, me):
+                warnings.append(f"Cắt rìa trống đoạn {ms:.1f}–{me:.1f}s còn {ns:.1f}–{ne:.1f}s")
             trimmed.append((i, ns, ne))
         items = trimmed
 

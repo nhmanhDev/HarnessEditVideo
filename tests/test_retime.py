@@ -61,3 +61,29 @@ def test_policy_realigns_text_when_a_segment_is_shortened_by_a_clip_boundary():
     # Đoạn 2 chỉ còn 2 giây (8–10) thay vì 4: chữ của đoạn ba (kế hoạch 6–8) dịch về 4–6 trên timeline thật.
     assert [(round(t.start, 1), round(t.end, 1)) for t in res.plan.texts] == [(4.0, 6.0)]
     assert res.output_seconds == 6.0
+
+
+def test_recenter_moves_window_onto_the_product_and_keeps_length():
+    from edit_agent.retime import recenter
+
+    # Sản phẩm hiện ở giây 5–9 (mức 20), còn lại là rèm trống (mức 3).
+    detail = [(i * 0.5, 20.0 if 5.0 <= i * 0.5 < 9.0 else 3.0) for i in range(30)]
+    thresh = empty_threshold(detail)
+    s, e = recenter(3.8, 6.0, detail, thresh, lo=0.0, hi=15.0)
+    assert abs((e - s) - 2.2) < 1e-6
+    assert s > 3.8  # đã dịch vào vùng có sản phẩm (dịch tối đa 1,2 giây)
+
+
+def test_recenter_never_leaves_the_clip_bounds():
+    from edit_agent.retime import recenter
+
+    detail = [(i * 0.5, 20.0 if i * 0.5 >= 10.0 else 3.0) for i in range(30)]
+    s, e = recenter(8.0, 10.2, detail, empty_threshold(detail), lo=7.0, hi=10.5)
+    assert 7.0 <= s and e <= 10.5
+
+
+def test_recenter_keeps_window_when_nothing_is_better():
+    from edit_agent.retime import recenter
+
+    detail = [(i * 0.5, 10.0) for i in range(30)]
+    assert recenter(3.0, 5.2, detail, empty_threshold(detail), 0.0, 15.0) == (3.0, 5.2)
