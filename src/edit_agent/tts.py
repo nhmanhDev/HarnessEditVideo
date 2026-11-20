@@ -35,7 +35,8 @@ class VoiceStudioTTS:
         self,
         base_url: str,
         voice: str,
-        engine: str = "vieneu",
+        engine: str = "omnivoice",
+        speed: float = 1.0,
         app_token: str | None = None,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
@@ -44,6 +45,8 @@ class VoiceStudioTTS:
         self._base = base_url.rstrip("/")
         self._voice = voice
         self._engine = engine
+        # Tốc độ 1,0 (tự nhiên). Đo lặp 3 lần: 1,0 đạt 73%, 0,8 đạt 69%, không khác có ý nghĩa.
+        self._speed = speed
         self._token = app_token
         self._client = client or httpx.Client(timeout=120)
         self._sleep = sleep
@@ -78,7 +81,13 @@ class VoiceStudioTTS:
     def synthesize(self, text: str, out: Path) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         voice_id = self.resolve_voice()
-        body = {"voiceId": voice_id, "text": text, "engine": self._engine, "async": True}
+        body = {
+            "voiceId": voice_id,
+            "text": text,
+            "engine": self._engine,
+            "speed": self._speed,
+            "async": True,
+        }
         started = self._check(
             self._client.post(f"{self._base}/api/synthesize", json=body, headers=self._headers()), "tạo việc"
         )
@@ -138,10 +147,11 @@ class OpenAITTS:
 def make_provider(name: str, voice: str) -> TTSProvider:
     if name == "voicestudio":
         base = os.environ.get("TTS_BASE_URL", "http://127.0.0.1:8891")
-        # omnivoice đọc tiếng Việt chính xác hơn vieneu trên cùng 4 câu thử (65% so với 42% từ khớp, 2026-11-20).
+        # omnivoice đọc tiếng Việt tốt hơn vieneu trên cùng 4 câu thử (2026-11-20, xem docs/QA.md).
         engine = os.environ.get("TTS_ENGINE", "omnivoice")
         token = os.environ.get("VOICE_STUDIO_TOKEN") or None
-        return VoiceStudioTTS(base_url=base, voice=voice, engine=engine, app_token=token)
+        speed = float(os.environ.get("TTS_SPEED", "").strip() or "1.0")
+        return VoiceStudioTTS(base_url=base, voice=voice, engine=engine, speed=speed, app_token=token)
     if name == "openai":
         key = os.environ.get("OPENAI_API_KEY", "")
         if not key:
