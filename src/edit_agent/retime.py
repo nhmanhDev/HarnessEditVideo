@@ -133,39 +133,33 @@ def recenter(
     thresh: float,
     lo: float,
     hi: float,
-    max_shift: float = 1.2,
+    max_shift: float = 3.0,
     step: float = 0.25,
     motion: list[tuple[float, float]] | None = None,
     motion_ref: float = 3.0,
 ) -> tuple[float, float]:
-    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ sản phẩm hiện rõ và đứng yên.
+    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ MỌI khung đều có sản phẩm và đứng yên.
 
-    Điểm của cửa sổ là độ hiện diện trung bình, chia cho (1 + chuyển động / motion_ref) để tránh đoạn sản phẩm
-    đang trượt vào hoặc ra. Phạt nặng nếu đầu hoặc cuối cửa sổ là khung trống hoặc đang chuyển động mạnh.
-    Chọn dịch ít nhất khi điểm bằng nhau; cửa sổ không đổi nếu không có chỗ tốt hơn.
+    Điểm của cửa sổ là mức hiện diện của khung xấu nhất trong cửa sổ, chia cho (1 + chuyển động lớn nhất /
+    motion_ref). Một khung trống hoặc đang trượt là đủ để bị chê, nên xét khung xấu nhất chứ không phải trung bình.
+    Khi điểm bằng nhau chọn dịch ít nhất; cửa sổ không đổi nếu không có chỗ tốt hơn.
     """
     if not detail:
         return start, end
     length = end - start
     times = [t for t, _ in detail]
     mtimes = [t for t, _ in motion] if motion else []
-    mthr = 2.5 * float(np.median([m for _, m in motion])) if motion else 0.0
+
+    def worst(series, stimes, s, pick):
+        i0, i1 = bisect.bisect_left(stimes, s), bisect.bisect_right(stimes, s + length)
+        vals = [v for _, v in series[i0:i1]] or [_detail_at(series, stimes, s + length / 2)]
+        return pick(vals)
 
     def score(s: float) -> float:
-        base = _level(detail, times, s, s + length)
+        base = worst(detail, times, s, min)
         if motion:
-            base = base / (1.0 + _level(motion, mtimes, s, s + length) / motion_ref)
-        ok = (
-            _level(detail, times, s, s + 0.5) >= thresh
-            and _level(detail, times, s + length - 0.5, s + length) >= thresh
-        )
-        if motion:
-            ok = (
-                ok
-                and _level(motion, mtimes, s, s + 0.5) <= mthr
-                and _level(motion, mtimes, s + length - 0.5, s + length) <= mthr
-            )
-        return base if ok else base * 0.5
+            base = base / (1.0 + worst(motion, mtimes, s, max) / motion_ref)
+        return base
 
     best_s, best = start, score(start)
     for k in range(1, int(max_shift / step) + 1):
