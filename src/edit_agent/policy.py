@@ -98,6 +98,23 @@ def _overlaps(a: Span, b: Span) -> bool:
     return a.start < b.end and b.start < a.end
 
 
+def uncovered_seconds(voice_lines: list[VoiceLine], output_seconds: float) -> float:
+    """Tổng thời gian trên timeline đầu ra không có lời đọc nào (các lời đọc có thể chồng lên nhau)."""
+    spans = sorted((v.start, min(v.end, output_seconds)) for v in voice_lines if v.start < output_seconds)
+    covered = 0.0
+    cur_s, cur_e = None, None
+    for s, e in spans:
+        if cur_e is None or s > cur_e:
+            if cur_e is not None:
+                covered += cur_e - cur_s
+            cur_s, cur_e = s, e
+        else:
+            cur_e = max(cur_e, e)
+    if cur_e is not None:
+        covered += cur_e - cur_s
+    return max(0.0, output_seconds - covered)
+
+
 def apply_policy(
     spec: JobSpec,
     plan: EditPlan,

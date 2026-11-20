@@ -19,7 +19,7 @@ from .intake import fetch_source, new_job_dir
 from .media import Probe, extract_audio_wav, extract_frames, probe
 from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
-from .policy import PolicyResult, Span, apply_policy, speech_spans
+from .policy import PolicyResult, Span, apply_policy, speech_spans, uncovered_seconds
 from .render import RenderJob, render
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
@@ -154,8 +154,8 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
             voice_files.append((line.start, rel))
 
     # Không có tiếng gốc và không có lời đọc: video sẽ im lặng. Khi đó tự đặt nhạc nền từ kho có giấy phép.
-    voiced = sum(v.end - v.start for v in policy.voice_lines)
-    needs_bed = (not policy.keep_audio) and voiced < 0.7 * policy.output_seconds
+    # Thiếu tiếng = có khoảng không có lời quá 1 giây (kể cả đoạn cuối video).
+    needs_bed = (not policy.keep_audio) and uncovered_seconds(policy.voice_lines, policy.output_seconds) > 1.0
     if needs_bed and not policy.plan.music.track and tracks:
         auto = sorted(tracks)[0]
         policy.plan = policy.plan.model_copy(

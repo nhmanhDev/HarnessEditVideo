@@ -28,9 +28,11 @@
 Kết luận: chuẩn giao là -14 LUFS (cả 6 reel đều đạt). Đỉnh thực có thể tới -0,5, nên ngưỡng chỉ chặn xén. Có reel đứng hình tới 1,6 giây khi giữ hình sản phẩm, nên ngưỡng đứng hình là 2 giây. Nhịp cắt là cảnh báo, không phải lỗi, vì 2 reel một cảnh vẫn đạt.
 
 ## Kết quả bản dựng thử (đầu vào: clip Drive, 1440x2560, nền mờ)
-| Job | Trước (v2) | Sau (v4) |
+| Job | Trước (v2) | Sau (v5, đoạn chọn tự động) |
 |---|---|---|
 | Loại 1, có nhạc | -19,0 LUFS (quá nhỏ), 0 cắt, 22 giây | -14,6 LUFS, 7 cắt, trung vị 2,2 giây, đỉnh -1,2 dBTP, 17,6 giây, ĐẠT |
-| Loại 2, lời đọc | im lặng 10,85 giây, không nhạc, nhịp cắt 5 giây | -14,4 LUFS, im lặng 0, 5 cắt, trung vị 2,2 giây, đỉnh -2,4 dBTP, 13,5 giây, ĐẠT |
+| Loại 2, lời đọc giọng ILABY | im lặng 10,85 giây, không nhạc, nhịp cắt 5 giây | -13,8 LUFS, im lặng 0, 5 cắt, trung vị 2,2 giây, đỉnh -2,6 dBTP, 13,2 giây, ĐẠT |
+
+Đoạn chọn tự động (`edit_agent/select.py`) đo độ cạnh Laplacian mỗi nửa giây, chọn cửa sổ 2,2 giây có chi tiết cao nhất, không chồng nhau. Kiểm bằng mắt trên contact sheet: sản phẩm hiện ở gần như mọi khung, không còn đoạn rèm trống.
 
 Lưu ý còn lại: vài khung đầu mỗi đoạn vẫn là rèm trống, vì chọn đoạn bằng tay từ contact sheet. Bước tiếp theo là chọn đoạn tự động theo độ chi tiết khung hình.
