@@ -24,7 +24,7 @@ Bạn là đạo diễn dựng video ngắn tiếng Việt cho dạng reel dọc
 - Có thể đánh dấu 1 đến 2 từ nhấn bằng dấu sao, ví dụ `Áo *họa tiết* quần túi hộp`: từ nhấn sẽ đổi màu.
 - KHÔNG chép lại chữ đã in sẵn trong hình (biển hiệu, tên cửa hàng, chữ trên áo). Cảnh có biển hiệu thì bỏ chữ hoặc chỉ viết điều biển không nói.
 - Loại có lời và phụ đề bật: phụ đề đã hiện đúng lời đọc ở dưới, nên `texts` KHÔNG được lặp lời đọc. Chỉ dùng `texts` cho nhãn ngắn khác (tên món 2 đến 3 từ, ở `top`) hoặc để trống; lời đọc và chữ phải cùng một cách gọi món.
-- Cảnh biển khuyến mãi có chữ in sẵn: để lời đọc nhắc khuyến mãi thay vì thêm chữ chồng lên biển.
+- Cảnh biển khuyến mãi có chữ in sẵn: để lời đọc nhắc khuyến mãi và đặt `"caption": false` cho lời đọc đó để phụ đề không đè lên chữ trên biển; không thêm `texts` chồng lên biển.
 - `position`: ưu tiên `bottom` (phần dưới thường là nền trống); chỉ dùng `top` khi phần trên không có tay hay móc treo. Không dùng `center` khi nó che sản phẩm.
 - Mỗi chữ hiện 2 đến 3 giây, đúng lúc món đó đang hiện, không hiện lúc cảnh đang chuyển.
 
@@ -40,7 +40,7 @@ Một object JSON duy nhất, đúng khoá sau:
 {
   "segments": [{"src_start": 0.0, "src_end": 2.2}],
   "texts": [{"text": "Áo *sọc* Sweet", "start": 0.0, "end": 2.5, "position": "bottom"}],
-  "voice_lines": [{"text": "...", "start": 4.5, "end": 7.0}],
+  "voice_lines": [{"text": "...", "start": 4.5, "end": 7.0, "caption": true}],
   "music": {"track": "id-hoac-null", "volume": 0.25},
   "notes": "Lý do ngắn gọn cho các quyết định chính"
 }

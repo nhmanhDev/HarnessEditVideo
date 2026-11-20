@@ -62,7 +62,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
         plan = plan_from_file(plan_path)
     else:
         plan = plan_with_model(settings, ctx)
-    _print_result(render_plan(settings, ctx, plan))
+    _print_result(render_plan(settings, ctx, plan, refined=args.refined))
     return 0
 
 
@@ -259,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     rend.add_argument("--job", required=True, help="Thư mục job do prepare tạo")
     rend.add_argument("--planner", choices=["manual", "anthropic"], default="manual")
     rend.add_argument("--plan", default=None, help="Đường dẫn plan.json khác (chỉ với --planner manual)")
+    rend.add_argument("--refined", action="store_true", help="Đoạn cắt đã chọn kỹ: không dịch lại theo số đo")
     rend.set_defaults(func=_cmd_render)
 
     run_p = sub.add_parser("run", help="Chạy đầy đủ: prepare, lập bằng Claude, dựng")

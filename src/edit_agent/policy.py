@@ -274,6 +274,8 @@ def apply_policy(
                 for mapped in map_span(Span(seg.start, seg.end), pieces):
                     subtitles.append(Subtitle(mapped.start, mapped.end, seg.text))
             for line in voice_lines:
+                if not line.caption:
+                    continue
                 subtitles.append(Subtitle(line.start, line.end, line.text))
             subtitles.sort(key=lambda s: s.start)
 

@@ -71,6 +71,18 @@ def test_silent_source_allows_voice_lines_and_mutes_original():
     assert any("không có lời nói" in w for w in res.warnings)
 
 
+def test_voice_line_with_caption_false_is_spoken_but_not_subtitled():
+    plan = _plan(
+        voice_lines=[
+            VoiceLine(text="áo đỏ", start=0, end=2),
+            VoiceLine(text="giảm năm mươi phần trăm", start=3, end=5, caption=False),
+        ]
+    )
+    res = apply_policy(_spec(JobType.SPEECH_CAPTION, captions=True), plan, [], 10, set())
+    assert [v.text for v in res.voice_lines] == ["áo đỏ", "giảm năm mươi phần trăm"]
+    assert [s.text for s in res.subtitles] == ["áo đỏ"]
+
+
 def test_captions_come_from_transcript_on_output_timeline():
     tr = [_tr(3.0, 4.0, "câu một"), _tr(8.0, 9.0, "câu hai")]
     plan = _plan(segments=[Segment(src_start=2, src_end=5), Segment(src_start=7, src_end=10)])

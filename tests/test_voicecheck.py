@@ -1,6 +1,18 @@
 from pathlib import Path
 
-from edit_agent.voicecheck import best_take, similarity
+from edit_agent.voicecheck import best_take, similarity, spoken
+
+
+def test_spoken_numbers_percent_and_letters():
+    assert spoken("giảm đến 50%") == "giảm đến năm mươi phần trăm"
+    assert spoken("Áo trắng số 33") == "Áo trắng số ba mươi ba"
+    assert spoken("Áo đỏ chữ B") == "Áo đỏ chữ bê"
+    assert spoken("21 và 15") == "hai mươi mốt và mười lăm"
+    assert spoken("105") == "một trăm lẻ năm"
+
+
+def test_similarity_treats_digits_and_words_alike():
+    assert similarity("giảm 50%", "giảm năm mươi phần trăm") > 0.95
 
 
 def test_similarity_ignores_accents_and_punctuation():

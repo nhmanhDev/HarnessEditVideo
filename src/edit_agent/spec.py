@@ -45,6 +45,7 @@ class VoiceLine(BaseModel):
     text: str = Field(min_length=1, max_length=400)
     start: float = Field(ge=0, description="Thời điểm trên timeline đầu ra")
     end: float = Field(gt=0)
+    caption: bool = Field(default=True, description="False: đọc nhưng không hiện phụ đề (cảnh có chữ in sẵn)")
 
 
 class Music(BaseModel):
