@@ -20,7 +20,7 @@ import numpy as np
 from .clips import combine_clips
 from .config import Settings, require_tool
 from .intake import fetch_folder, fetch_source, is_folder_input, new_job_dir
-from .media import Probe, extract_audio_wav, extract_frames, probe
+from .media import Probe, extract_audio_wav, extract_frames, probe, run
 from .motion_hf import render_overlay
 from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
@@ -31,6 +31,7 @@ from .select import analyze_frames, hold_intervals, motion_scores, pick_windows,
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
 from .tts import make_provider
+from .voicecheck import best_take
 
 
 @dataclass
@@ -180,6 +181,16 @@ def plan_with_model(settings: Settings, ctx: JobContext) -> EditPlan:
     return plan
 
 
+def _hear(settings: Settings, audio: Path) -> str:
+    """Nghe lại một file giọng đọc để so với lời viết."""
+    wav = audio.with_suffix(".check.wav")
+    run([settings.ffmpeg, "-y", "-loglevel", "error", "-i", str(audio), "-ac", "1", "-ar", "16000", str(wav)])
+    try:
+        return " ".join(s.text for s in transcribe(wav, settings.whisper_model, "vi"))
+    finally:
+        wav.unlink(missing_ok=True)
+
+
 def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan, refined: bool = False) -> RunResult:
     """refined=True: đoạn cắt đã được model chọn lại bằng ảnh dày, không dịch lại theo số đo."""
     ffmpeg = require_tool(settings.ffmpeg)
@@ -208,7 +219,15 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan, refined: bo
             key = hashlib.sha1(f"{settings.tts_voice}|{line.text}".encode()).hexdigest()[:12]
             rel = f"voice/{key}.mp3"
             if not (job_dir / rel).exists():
-                provider.synthesize(line.text, job_dir / rel)
+                tries = int(os.environ.get("VOICE_TAKES", "").strip() or "3")
+                score = best_take(
+                    provider.synthesize,
+                    lambda p: _hear(settings, p),
+                    line.text,
+                    job_dir / rel,
+                    tries=tries,
+                )
+                print(f"Lời đọc '{line.text[:30]}': độ khớp {score:.2f}")
             voice_files.append((line.start, rel))
 
     # Không có tiếng gốc và không có lời đọc: video sẽ im lặng. Khi đó tự đặt nhạc nền từ kho có giấy phép.

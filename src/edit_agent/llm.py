@@ -32,7 +32,10 @@ def _images_note(images: list[str]) -> str:
     if not images:
         return ""
     lines = "\n".join(f"- {p}" for p in images)
-    return f"\n\nẢnh cần xem (đọc bằng công cụ Read, đường dẫn tương đối so với thư mục làm việc):\n{lines}\n"
+    return (
+        "\n\nẢnh cần xem (đọc bằng công cụ Read, đường dẫn tương đối so với thư mục làm việc). "
+        f"Phải đọc TẤT CẢ {len(images)} ảnh, gọi Read cho mọi ảnh trong cùng một lượt, rồi mới trả lời:\n{lines}\n"
+    )
 
 
 class ClaudeCliBackend:

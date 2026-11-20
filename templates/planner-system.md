@@ -23,6 +23,8 @@ Bạn là đạo diễn dựng video ngắn tiếng Việt cho dạng reel dọc
 - Chỉ viết điều NHÌN THẤY hoặc NGHE THẤY: tên món, màu, hoa văn, chữ in trên áo. KHÔNG bịa chất liệu, giá, khuyến mãi, và KHÔNG viết lời kêu gọi mua hàng ("chốt đơn", "mua ngay") nếu không có trong lời hoặc yêu cầu.
 - Có thể đánh dấu 1 đến 2 từ nhấn bằng dấu sao, ví dụ `Áo *họa tiết* quần túi hộp`: từ nhấn sẽ đổi màu.
 - KHÔNG chép lại chữ đã in sẵn trong hình (biển hiệu, tên cửa hàng, chữ trên áo). Cảnh có biển hiệu thì bỏ chữ hoặc chỉ viết điều biển không nói.
+- Loại có lời và phụ đề bật: phụ đề đã hiện đúng lời đọc ở dưới, nên `texts` KHÔNG được lặp lời đọc. Chỉ dùng `texts` cho nhãn ngắn khác (tên món 2 đến 3 từ, ở `top`) hoặc để trống; lời đọc và chữ phải cùng một cách gọi món.
+- Cảnh biển khuyến mãi có chữ in sẵn: để lời đọc nhắc khuyến mãi thay vì thêm chữ chồng lên biển.
 - `position`: ưu tiên `bottom` (phần dưới thường là nền trống); chỉ dùng `top` khi phần trên không có tay hay móc treo. Không dùng `center` khi nó che sản phẩm.
 - Mỗi chữ hiện 2 đến 3 giây, đúng lúc món đó đang hiện, không hiện lúc cảnh đang chuyển.
 
