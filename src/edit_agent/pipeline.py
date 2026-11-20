@@ -24,7 +24,7 @@ from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
 from .policy import PolicyResult, Span, apply_policy, speech_spans, uncovered_seconds
 from .render import RenderJob, render
-from .select import analyze_frames, pick_windows
+from .select import analyze_frames, pick_windows, presence_scores
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
 from .tts import make_provider
@@ -102,10 +102,11 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
 
     # Đoạn gợi ý: nhiều chi tiết, khác nhau về hình. Đưa cho model để tránh khung trống và cảnh lặp.
     scores, sigs = analyze_frames(ffmpeg, src, info.duration)
-    # Độ chi tiết theo thời gian: dùng lúc dựng để cắt rìa khung trống ở đầu và cuối mỗi đoạn.
-    _write_json(job_dir / "detail.json", [[round(t, 2), round(s, 3)] for t, s in scores])
     boundaries = [c["end"] for c in clips[:-1]]
-    wins = pick_windows(scores, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
+    # Độ lệch so với phông của từng clip: cao = có sản phẩm trong khung. Dùng để chọn đoạn gợi ý và cắt rìa khung trống.
+    presence = presence_scores(scores, sigs, boundaries)
+    _write_json(job_dir / "detail.json", [[round(t, 2), round(s, 3)] for t, s in presence])
+    wins = pick_windows(presence, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
     # Đoạn gợi ý không được vượt ranh giới clip.
     candidates = [w.to_dict() for w in wins if not any(w.start < b < w.end for b in boundaries)]
     _write_json(job_dir / "candidates.json", candidates)

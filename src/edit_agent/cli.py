@@ -111,6 +111,40 @@ def _cmd_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_review(args: argparse.Namespace) -> int:
+    """Cho model chấm một bản đã dựng trong job (final.mp4 và plan.json), không dựng lại."""
+    from .agent import review
+    from .llm import make_backend
+    from .qa import judge, measure
+    from .sheets import make_sheet, make_source_sheets
+    from .spec import JobType
+
+    settings = load_settings()
+    job_dir = Path(args.job)
+    ctx = load_context(job_dir)
+    plan = plan_from_file(Path(args.plan) if args.plan else job_dir / "plan.json")
+    backend = make_backend(
+        args.backend or settings.planner_backend,
+        claude_bin=settings.claude_bin,
+        claude_model=settings.claude_model,
+        command=settings.planner_cmd,
+    )
+    if not (job_dir / "font.ttf").exists() and settings.font_file:
+        import shutil
+
+        shutil.copy2(settings.font_file, job_dir / "font.ttf")
+    m = judge(measure(settings, job_dir / "final.mp4"), expect_audio=ctx.spec.job_type == JobType.SPEECH_CAPTION)
+    if not list(job_dir.glob("sheet_source*.jpg")):
+        make_source_sheets(settings.ffmpeg, job_dir, ctx.src_rel, ctx.info.duration)
+    out_sheet = make_sheet(settings.ffmpeg, job_dir, "final.mp4", "sheet_out_review.jpg", m.duration, max_frames=30)
+    tracks = sorted(load_tracks(settings.music_dir))
+    score, issues, _revised = review(backend, ctx, plan, m, out_sheet, tracks)
+    print(f"Điểm: {score}  (QA {'đạt' if not m.failures else 'chưa đạt'})")
+    for issue in issues:
+        print(f"- {issue}")
+    return 0
+
+
 def _cmd_qa(args: argparse.Namespace) -> int:
     import json
 
@@ -213,6 +247,12 @@ def main(argv: list[str] | None = None) -> int:
     agent_job_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
     agent_job_p.add_argument("--rounds", type=int, default=2)
     agent_job_p.set_defaults(func=_cmd_agent)
+
+    review_p = sub.add_parser("review", help="Cho model chấm bản đã dựng trong job (không dựng lại)")
+    review_p.add_argument("--job", required=True)
+    review_p.add_argument("--plan", default=None, help="Mặc định: plan.json trong thư mục job")
+    review_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
+    review_p.set_defaults(func=_cmd_review)
 
     qa_p = sub.add_parser("qa", help="Đo chất lượng video bằng số: âm lượng, khung đen, đứng hình, nhịp cắt")
     qa_p.add_argument("files", nargs="+")

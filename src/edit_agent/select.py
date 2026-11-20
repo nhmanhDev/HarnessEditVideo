@@ -129,3 +129,23 @@ def pick_windows(
             if all(apart(w, c) for c, _ in chosen) and (w, i) not in chosen:
                 chosen.append((w, i))
     return sorted((w for w, _ in chosen), key=lambda w: w.start)
+
+
+def presence_scores(
+    scores: list[tuple[float, float]], sigs: np.ndarray, boundaries: list[float] | None = None
+) -> list[tuple[float, float]]:
+    """Độ lệch của mỗi khung so với phông (trung vị theo từng clip): cao = có sản phẩm hoặc tay trong khung.
+
+    Khung rèm trống có độ lệch thấp (khoảng 4–6), khung có sản phẩm cao hơn hẳn (10–30). Độ chi tiết Laplacian không
+    phân biệt được rèm với sản phẩm vì rèm có nếp gấp. Phông tính riêng cho từng clip, theo các ranh giới.
+    """
+    times = [t for t, _ in scores]
+    edges = [0.0, *sorted(boundaries or []), float("inf")]
+    out: list[tuple[float, float]] = []
+    for a, b in zip(edges, edges[1:], strict=False):
+        idx = [i for i, t in enumerate(times) if a <= t < b]
+        if not idx:
+            continue
+        plate = np.median(sigs[idx], axis=0)
+        out += [(times[i], float(np.abs(sigs[i] - plate).mean())) for i in idx]
+    return sorted(out)

@@ -23,11 +23,11 @@ class Seg:
         return self.end - self.start
 
 
-def empty_threshold(detail: list[tuple[float, float]], factor: float = 0.55) -> float:
+def empty_threshold(detail: list[tuple[float, float]], factor: float = 0.5) -> float:
     """Ngưỡng độ chi tiết dưới mức này coi là khung trống (rèm, tường)."""
     if not detail:
         return 0.0
-    return factor * float(np.percentile([d for _, d in detail], 60))
+    return factor * float(np.percentile([d for _, d in detail], 75))
 
 
 def _detail_at(detail: list[tuple[float, float]], times: list[float], t: float) -> float:

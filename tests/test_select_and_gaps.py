@@ -34,3 +34,30 @@ def test_pick_windows_prefers_steady_over_sliding_frames():
     wins = pick_windows(scores, 1, 2.0, 10.0, sigs=sigs, min_diff=0.0, motion_ref=3.0)
     assert len(wins) == 1
     assert wins[0].start < 5.0
+
+
+def test_presence_scores_separate_empty_background_from_product_frames():
+    import numpy as np
+
+    from edit_agent.select import presence_scores
+
+    scores = [(i * 0.5, 9.0) for i in range(12)]  # Laplacian gần như bằng nhau (rèm cũng có nếp gấp)
+    sigs = np.full((12, 8), 100.0, dtype=np.float32)
+    for i in (2, 3, 4, 5, 6):  # sản phẩm hiện ở các mẫu 2–6
+        sigs[i, :4] += 40.0
+    out = presence_scores(scores, sigs)
+    values = [v for _, v in out]
+    assert max(values[0], values[1], values[9], values[10]) < 5.0  # rèm trống: thấp
+    assert min(values[3], values[4], values[5]) > 10.0  # có sản phẩm: cao
+
+
+def test_presence_uses_a_separate_background_for_each_clip():
+    import numpy as np
+
+    from edit_agent.select import presence_scores
+
+    scores = [(i * 0.5, 9.0) for i in range(8)]
+    sigs = np.zeros((8, 4), dtype=np.float32)
+    sigs[4:] = 200.0  # clip thứ hai có phông sáng hơn hẳn
+    out = presence_scores(scores, sigs, boundaries=[2.0])
+    assert all(v < 1.0 for _, v in out)
