@@ -8,6 +8,7 @@ run = prepare + lập kế hoạch bằng Claude + render.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -17,10 +18,12 @@ from pathlib import Path
 from .config import Settings, require_tool
 from .intake import fetch_source, new_job_dir
 from .media import Probe, extract_audio_wav, extract_frames, probe
+from .motion_hf import render_overlay
 from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
 from .policy import PolicyResult, Span, apply_policy, speech_spans, uncovered_seconds
 from .render import RenderJob, render
+from .select import analyze_frames, pick_windows
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
 from .tts import make_provider
@@ -85,9 +88,15 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
     frames = extract_frames(ffmpeg, src, job_dir / "frames", info.duration)
     _write_json(job_dir / "frames.json", [{"t": round(t, 2), "file": f.name} for t, f in frames])
 
+    # Đoạn gợi ý: nhiều chi tiết, khác nhau về hình. Đưa cho model để tránh khung trống và cảnh lặp.
+    scores, sigs = analyze_frames(ffmpeg, src, info.duration)
+    wins = pick_windows(scores, 10, 2.2, info.duration, sigs=sigs, min_diff=8.0)
+    candidates = [w.to_dict() for w in wins]
+    _write_json(job_dir / "candidates.json", candidates)
+
     tracks = load_tracks(settings.music_dir)
     (job_dir / "packet.md").write_text(
-        build_packet(spec, info.duration, speech, transcript, sorted(tracks)), encoding="utf-8"
+        build_packet(spec, info.duration, speech, transcript, sorted(tracks), candidates), encoding="utf-8"
     )
 
     return JobContext(
@@ -148,9 +157,12 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     voice_files: list[tuple[float, str]] = []
     if policy.voice_lines:
         provider = make_provider(settings.tts_provider, settings.tts_voice)
-        for k, line in enumerate(policy.voice_lines):
-            rel = f"voice/v{k}.mp3"
-            provider.synthesize(line.text, job_dir / rel)
+        for line in policy.voice_lines:
+            # Bộ nhớ đệm theo giọng và nội dung: vòng dựng lại không phải tạo lại lời đọc.
+            key = hashlib.sha1(f"{settings.tts_voice}|{line.text}".encode()).hexdigest()[:12]
+            rel = f"voice/{key}.mp3"
+            if not (job_dir / rel).exists():
+                provider.synthesize(line.text, job_dir / rel)
             voice_files.append((line.start, rel))
 
     # Không có tiếng gốc và không có lời đọc: video sẽ im lặng. Khi đó tự đặt nhạc nền từ kho có giấy phép.
@@ -162,7 +174,7 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
             update={"music": policy.plan.music.model_copy(update={"track": auto})}
         )
         policy.warnings.append(
-            f"Ít tiếng (lời đọc dưới 70% thời lượng): tự đặt nhạc nền '{auto}' từ kho có giấy phép"
+            f"Có khoảng không lời quá 1 giây: tự đặt nhạc nền '{auto}' từ kho có giấy phép"
         )
 
     music_rel: str | None = None
@@ -171,6 +183,21 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
         music_rel = f"music/{track.id}{track.file.suffix}"
         (job_dir / "music").mkdir(exist_ok=True)
         shutil.copy2(track.file, job_dir / music_rel)
+
+    # Chữ chuyển động: ưu tiên lớp HyperFrames (đẹp hơn); lỗi thì dùng chữ ffmpeg dự phòng.
+    overlay_rel: str | None = None
+    if settings.motion_engine == "hyperframes" and (policy.plan.texts or policy.subtitles):
+        overlay_rel = render_overlay(
+            job_dir,
+            policy.plan.texts,
+            policy.subtitles,
+            policy.output_seconds,
+            ctx.spec.width,
+            ctx.spec.height,
+            ctx.spec.fps,
+        )
+        if overlay_rel is None:
+            policy.warnings.append("Không dựng được lớp chữ HyperFrames: dùng chữ ffmpeg dự phòng")
 
     job = RenderJob(
         source=ctx.src_rel,
@@ -187,6 +214,7 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
         music_volume=policy.plan.music.volume,
         output="final.mp4",
         fit=ctx.spec.fit,
+        overlay_file=overlay_rel,
     )
     output = render(ffmpeg, job_dir, job, settings.font_file, settings.font_bold)
 

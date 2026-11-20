@@ -35,6 +35,7 @@ class RenderJob:
     music_volume: float = 0.25
     font_file: str | None = None  # ví dụ font.ttf
     font_bold_file: str | None = None  # font đậm cho tiêu đề, nếu có
+    overlay_file: str | None = None  # lớp chữ chuyển động WebM trong suốt (HyperFrames); thay cho drawtext
     output: str = "final.mp4"
     # "blur": giữ toàn bộ khung, nền mờ (không mất hai bên khi cắt từ video ngang). "crop": lấp đầy, cắt bớt.
     fit: str = "blur"
@@ -84,10 +85,16 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
         font_bold=job.font_bold_file,
     )
     filters: list[str] = []
-    for i, t in enumerate(job.texts):
-        filters.append(motion.title_filter(i, t, style))
-    for i, s in enumerate(job.subtitles):
-        filters.extend(motion.caption_filters(i, s, style, motion.caption_variants(i, s)))
+    if job.overlay_file:
+        # Lớp chữ chuyển động dựng sẵn (WebM trong suốt) là đầu vào cuối cùng, sau nhạc và các lời đọc.
+        overlay_index = 1 + (1 if job.music_file else 0) + len(job.voice_files)
+        parts.append(f"[{current}][{overlay_index}:v]overlay=0:0:format=auto[ovhf]")
+        current = "ovhf"
+    else:
+        for i, t in enumerate(job.texts):
+            filters.append(motion.title_filter(i, t, style))
+        for i, s in enumerate(job.subtitles):
+            filters.extend(motion.caption_filters(i, s, style, motion.caption_variants(i, s)))
     for k, f in enumerate(filters):
         nxt = f"ov{k}"
         parts.append(f"[{current}]{f}[{nxt}]")
@@ -137,6 +144,8 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
         out_end = max(0.0, job.output_seconds - job.music_fade_out_s)
         audio_parts.append(
             f"[{music_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+            # Cắt đoạn lặng ở đầu bài nhạc để video không im lặng ngay khi mở đầu.
+            f"silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB,"
             f"atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS,volume={job.music_volume:.3f},"
             f"afade=t=in:st=0:d={job.music_fade_in_s:.2f},"
             f"afade=t=out:st={out_end:.3f}:d={job.music_fade_out_s:.2f}[mus]"
@@ -172,7 +181,8 @@ def write_overlay_texts(job_dir: Path, job: RenderJob) -> None:
     (job_dir / "texts").mkdir(parents=True, exist_ok=True)
     vertical = job.height >= job.width
     for i, t in enumerate(job.texts):
-        (job_dir / "texts" / f"t{i}.txt").write_text(_wrap(t.text, vertical), encoding="utf-8")
+        plain = t.text.replace("*", "")  # bỏ dấu * đánh dấu từ nhấn khi dùng chữ drawtext dự phòng
+        (job_dir / "texts" / f"t{i}.txt").write_text(_wrap(plain, vertical), encoding="utf-8")
     for i, s in enumerate(job.subtitles):
         motion.write_caption_files(job_dir, i, s, vertical)
 
@@ -202,6 +212,9 @@ def render(
         inputs += ["-stream_loop", "-1", "-i", job.music_file]
     for _start, f in job.voice_files:
         inputs += ["-i", f]
+    if job.overlay_file:
+        # WebM có alpha phải giải mã bằng libvpx-vp9 mới giữ được kênh trong suốt.
+        inputs += ["-c:v", "libvpx-vp9", "-i", job.overlay_file]
 
     cmd = [
         ffmpeg,

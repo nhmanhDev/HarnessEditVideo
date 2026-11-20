@@ -37,6 +37,11 @@ class Settings:
     tts_voice: str
     font_file: Path | None
     font_bold: Path | None = None
+    motion_engine: str = "hyperframes"
+    planner_backend: str = "claude-cli"
+    claude_bin: str | None = None
+    claude_model: str | None = None
+    planner_cmd: str | None = None
 
     @property
     def music_dir(self) -> Path:
@@ -83,6 +88,11 @@ def load_settings(env_file: Path | None = None) -> Settings:
         tts_voice=_env("TTS_VOICE", ""),
         font_file=font,
         font_bold=_find_bold_font(),
+        motion_engine=_env("MOTION_ENGINE", "hyperframes"),
+        planner_backend=_env("PLANNER", "claude-cli"),
+        claude_bin=_env("CLAUDE_BIN", "") or None,
+        claude_model=_env("CLAUDE_MODEL", "") or None,
+        planner_cmd=_env("PLANNER_CMD", "") or None,
     )
 
 

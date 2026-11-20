@@ -82,12 +82,26 @@ def build_content(
     return content
 
 
+def _candidate_lines(candidates: list[dict] | None) -> list[str]:
+    """Đoạn gợi ý do harness đo (nhiều chi tiết, khác nhau về hình). Model được ưu tiên chọn từ đây."""
+    if not candidates:
+        return []
+    rows = ", ".join(f"{c['start']:.1f}–{c['end']:.1f}s" for c in candidates)
+    return [
+        "## Đoạn gợi ý (harness đo độ chi tiết và độ khác biệt hình; nên chọn đoạn từ đây)",
+        rows,
+        "Đây là gợi ý theo số đo, không thay cho việc nhìn ảnh lưới: bỏ đoạn nào sản phẩm chỉ hiện một nửa.",
+        "",
+    ]
+
+
 def build_packet(
     spec: JobSpec,
     src_duration: float,
     speech: list[Span],
     transcript: list[TranscriptSegment],
     tracks: list[str],
+    candidates: list[dict] | None = None,
 ) -> str:
     """Gói thông tin dạng văn bản (packet.md) để người hoặc agent khác lập plan.json mà không cần API.
 
@@ -118,6 +132,7 @@ def build_packet(
             "",
             f"Khoảng có lời gốc trong video nguồn: {_fmt_spans(speech)}",
             "",
+            *_candidate_lines(candidates),
             "## Transcript (thời gian theo video nguồn)",
             "\n".join(lines) if lines else "(không có lời)",
             "",

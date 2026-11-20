@@ -73,6 +73,38 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_agent(args: argparse.Namespace) -> int:
+    from .agent import run_agent
+    from .llm import make_backend
+
+    settings = load_settings()
+    spec = _spec_from_args(args)
+    name = args.backend or settings.planner_backend
+    client = None
+    if name == "anthropic":
+        import anthropic
+
+        client = anthropic.Anthropic()
+    backend = make_backend(
+        name,
+        claude_bin=settings.claude_bin,
+        claude_model=settings.claude_model,
+        command=settings.planner_cmd,
+        anthropic_client=client,
+        anthropic_model=settings.edit_model,
+    )
+    tracks = sorted(load_tracks(settings.music_dir))
+    result = run_agent(settings, spec, backend, tracks, rounds=args.rounds)
+    print(f"Job: {result.job_dir}")
+    for r in result.rounds:
+        status = "QA đạt" if r.qa_ok else "QA chưa đạt"
+        print(f"  vòng {r.index}: điểm {r.score}, {status}, {r.qa.duration}s")
+        for issue in r.issues:
+            print(f"    - {issue}")
+    print(f"Bản chọn: vòng {result.best.index} -> {result.job_dir / 'final_best.mp4'}")
+    return 0
+
+
 def _cmd_qa(args: argparse.Namespace) -> int:
     import json
 
@@ -165,6 +197,12 @@ def main(argv: list[str] | None = None) -> int:
     _add_spec_args(run_p)
     run_p.add_argument("--plan", default=None, help="Dùng kế hoạch có sẵn (JSON), bỏ qua Claude")
     run_p.set_defaults(func=_cmd_run)
+
+    agent_p = sub.add_parser("agent", help="Làm trọn vẹn: model lập kế hoạch, dựng, đo QA, tự xem lại và sửa")
+    _add_spec_args(agent_p)
+    agent_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
+    agent_p.add_argument("--rounds", type=int, default=2, help="Số vòng sửa tối đa sau lần dựng đầu")
+    agent_p.set_defaults(func=_cmd_agent)
 
     qa_p = sub.add_parser("qa", help="Đo chất lượng video bằng số: âm lượng, khung đen, đứng hình, nhịp cắt")
     qa_p.add_argument("files", nargs="+")
