@@ -36,6 +36,7 @@ class Settings:
     tts_provider: str
     tts_voice: str
     font_file: Path | None
+    font_bold: Path | None = None
 
     @property
     def music_dir(self) -> Path:
@@ -44,6 +45,22 @@ class Settings:
     @property
     def jobs_dir(self) -> Path:
         return self.workspace / "jobs"
+
+
+def _find_bold_font() -> Path | None:
+    """Font đậm có dấu tiếng Việt, theo thư mục font chuẩn của hệ điều hành. Không có thì dùng font thường."""
+    override = os.environ.get("FONT_BOLD_FILE", "").strip()
+    if override:
+        return Path(override)
+    candidates: list[Path] = []
+    system_root = os.environ.get("SystemRoot")
+    if system_root:
+        candidates.append(Path(system_root) / "Fonts" / "arialbd.ttf")
+    candidates += [
+        Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ]
+    return next((p for p in candidates if p.exists()), None)
 
 
 def _env(name: str, default: str) -> str:
@@ -65,6 +82,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         tts_provider=_env("TTS_PROVIDER", "voicestudio"),
         tts_voice=_env("TTS_VOICE", ""),
         font_file=font,
+        font_bold=_find_bold_font(),
     )
 
 

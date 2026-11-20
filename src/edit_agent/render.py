@@ -11,12 +11,10 @@ import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import motion
 from .media import run
 from .policy import Piece, Subtitle
 from .spec import TextOverlay
-
-_POS_Y = {"top": "h*0.08", "center": "(h-text_h)/2", "bottom": "h*0.72"}
-_SUB_Y = "h*0.84"
 
 
 @dataclass
@@ -36,6 +34,7 @@ class RenderJob:
     music_file: str | None = None
     music_volume: float = 0.25
     font_file: str | None = None  # ví dụ font.ttf
+    font_bold_file: str | None = None  # font đậm cho tiêu đề, nếu có
     output: str = "final.mp4"
     # "blur": giữ toàn bộ khung, nền mờ (không mất hai bên khi cắt từ video ngang). "crop": lấp đầy, cắt bớt.
     fit: str = "blur"
@@ -77,30 +76,21 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
     parts.append("".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[vc]")
 
     current = "vc"
-    overlays: list[tuple[str, str, str, str]] = []  # (nhãn file, vị trí, cỡ chữ, mốc thời gian)
     font = job.font_file or "font.ttf"
+    style = motion.Style(
+        width=job.width,
+        height=job.height,
+        font=font,
+        font_bold=job.font_bold_file,
+    )
+    filters: list[str] = []
     for i, t in enumerate(job.texts):
-        overlays.append(
-            (
-                f"texts/t{i}.txt",
-                _POS_Y[t.position],
-                str(int(job.height * 0.042)),
-                f"{t.start:.3f}|{t.end:.3f}",
-            )
-        )
+        filters.append(motion.title_filter(i, t, style))
     for i, s in enumerate(job.subtitles):
-        overlays.append(
-            (f"texts/s{i}.txt", _SUB_Y, str(int(job.height * 0.032)), f"{s.start:.3f}|{s.end:.3f}")
-        )
-
-    for k, (textfile, ypos, size, window) in enumerate(overlays):
-        start, end = window.split("|")
+        filters.extend(motion.caption_filters(i, s, style, motion.caption_variants(i, s)))
+    for k, f in enumerate(filters):
         nxt = f"ov{k}"
-        parts.append(
-            f"[{current}]drawtext=fontfile={font}:textfile={textfile}:fontsize={size}:fontcolor=white:"
-            f"box=1:boxcolor=black@0.45:boxborderw=22:line_spacing=8:x=(w-text_w)/2:y={ypos}:"
-            f"enable='between(t,{start},{end})'[{nxt}]"
-        )
+        parts.append(f"[{current}]{f}[{nxt}]")
         current = nxt
     video_label = current
 
@@ -184,13 +174,22 @@ def write_overlay_texts(job_dir: Path, job: RenderJob) -> None:
     for i, t in enumerate(job.texts):
         (job_dir / "texts" / f"t{i}.txt").write_text(_wrap(t.text, vertical), encoding="utf-8")
     for i, s in enumerate(job.subtitles):
-        (job_dir / "texts" / f"s{i}.txt").write_text(_wrap(s.text, vertical), encoding="utf-8")
+        motion.write_caption_files(job_dir, i, s, vertical)
 
 
-def render(ffmpeg: str, job_dir: Path, job: RenderJob, font_src: Path | None) -> Path:
+def render(
+    ffmpeg: str,
+    job_dir: Path,
+    job: RenderJob,
+    font_src: Path | None,
+    font_bold_src: Path | None = None,
+) -> Path:
     if font_src is not None and job.font_file is None:
         shutil.copy2(font_src, job_dir / "font.ttf")
         job.font_file = "font.ttf"
+    if font_bold_src is not None and job.font_bold_file is None:
+        shutil.copy2(font_bold_src, job_dir / "font_bold.ttf")
+        job.font_bold_file = "font_bold.ttf"
     if (job.texts or job.subtitles) and not job.font_file:
         raise RuntimeError("Thiếu font có dấu tiếng Việt. Đặt FONT_FILE trong .env.")
 

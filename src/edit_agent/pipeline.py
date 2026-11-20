@@ -188,7 +188,7 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
         output="final.mp4",
         fit=ctx.spec.fit,
     )
-    output = render(ffmpeg, job_dir, job, settings.font_file)
+    output = render(ffmpeg, job_dir, job, settings.font_file, settings.font_bold)
 
     _write_json(job_dir / "plan.json", policy.plan.model_dump(mode="json"))
     # Điểm cắt theo kế hoạch trên timeline đầu ra; QA dùng để đếm nhịp cắt chính xác.
