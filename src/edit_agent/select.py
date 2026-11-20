@@ -81,6 +81,7 @@ def pick_windows(
     min_gap: float = 0.5,
     sigs: np.ndarray | None = None,
     min_diff: float = 6.0,
+    motion_ref: float = 3.0,
 ) -> list[Window]:
     """Chọn tối đa `count` cửa sổ dài `length` giây, chi tiết cao, không chồng nhau, rải đều.
 
@@ -99,7 +100,12 @@ def pick_windows(
         end = start + length
         if end > duration:
             break
-        candidates.append((Window(start, end, float(values[i : i + k].mean())), i))
+        base = float(values[i : i + k].mean())
+        if sigs is not None and k > 1:
+            # Ưu tiên đoạn đứng yên (sản phẩm được giữ ổn định), phạt đoạn đang trượt vào hoặc ra khỏi khung.
+            motion = float(np.abs(np.diff(sigs[i : i + k], axis=0)).mean())
+            base = base / (1.0 + motion / motion_ref)
+        candidates.append((Window(start, end, base), i))
     candidates.sort(key=lambda c: c[0].score, reverse=True)
 
     def apart(w: Window, c: Window) -> bool:

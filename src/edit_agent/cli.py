@@ -78,7 +78,13 @@ def _cmd_agent(args: argparse.Namespace) -> int:
     from .llm import make_backend
 
     settings = load_settings()
-    spec = _spec_from_args(args)
+    ctx = None
+    if getattr(args, "job", None):
+        # Job đã chuẩn bị sẵn (prepare): dùng lại, không tải và phân tích lại từ đầu.
+        ctx = load_context(Path(args.job))
+        spec = ctx.spec
+    else:
+        spec = _spec_from_args(args)
     name = args.backend or settings.planner_backend
     client = None
     if name == "anthropic":
@@ -94,7 +100,7 @@ def _cmd_agent(args: argparse.Namespace) -> int:
         anthropic_model=settings.edit_model,
     )
     tracks = sorted(load_tracks(settings.music_dir))
-    result = run_agent(settings, spec, backend, tracks, rounds=args.rounds)
+    result = run_agent(settings, spec, backend, tracks, rounds=args.rounds, ctx=ctx)
     print(f"Job: {result.job_dir}")
     for r in result.rounds:
         status = "QA đạt" if r.qa_ok else "QA chưa đạt"
@@ -201,6 +207,12 @@ def main(argv: list[str] | None = None) -> int:
     agent_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
     agent_p.add_argument("--rounds", type=int, default=2, help="Số vòng sửa tối đa sau lần dựng đầu")
     agent_p.set_defaults(func=_cmd_agent)
+
+    agent_job_p = sub.add_parser("agent-job", help="Như agent nhưng trên job đã chuẩn bị sẵn (prepare)")
+    agent_job_p.add_argument("--job", required=True, help="Thư mục job do prepare tạo")
+    agent_job_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
+    agent_job_p.add_argument("--rounds", type=int, default=2)
+    agent_job_p.set_defaults(func=_cmd_agent)
 
     qa_p = sub.add_parser("qa", help="Đo chất lượng video bằng số: âm lượng, khung đen, đứng hình, nhịp cắt")
     qa_p.add_argument("files", nargs="+")

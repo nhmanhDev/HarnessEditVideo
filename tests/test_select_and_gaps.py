@@ -21,3 +21,16 @@ def test_pick_windows_prefers_high_detail_and_spreads_out():
     assert len(wins) == 3
     assert all(w.start >= 5.0 for w in wins)
     assert all(wins[i].end + 0.5 <= wins[i + 1].start for i in range(len(wins) - 1))
+
+
+def test_pick_windows_prefers_steady_over_sliding_frames():
+    import numpy as np
+
+    # 20 mẫu cách 0,5 giây, chi tiết bằng nhau. Đoạn 0–4,5 giây đứng yên; đoạn 5–9,5 giây biến đổi mạnh.
+    scores = [(i * 0.5, 10.0) for i in range(20)]
+    sigs = np.zeros((20, 8), dtype=np.float32)
+    for i in range(10, 20):
+        sigs[i] = (i % 2) * 60.0  # nhảy mạnh giữa hai khung liền nhau
+    wins = pick_windows(scores, 1, 2.0, 10.0, sigs=sigs, min_diff=0.0, motion_ref=3.0)
+    assert len(wins) == 1
+    assert wins[0].start < 5.0

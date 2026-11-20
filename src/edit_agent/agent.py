@@ -140,8 +140,10 @@ def run_agent(
     track_ids: list[str],
     rounds: int = 2,
     target_score: float = 8.0,
+    ctx: JobContext | None = None,
 ) -> AgentResult:
-    ctx = prepare(settings, spec)
+    # Có sẵn ctx (job đã chuẩn bị) thì dùng lại, không chuẩn bị lại từ đầu.
+    ctx = ctx or prepare(settings, spec)
     plan = plan_with_backend(backend, ctx, settings, track_ids)
     done: list[Round] = []
     expect_audio = spec.job_type == JobType.SPEECH_CAPTION
