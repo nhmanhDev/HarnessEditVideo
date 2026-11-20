@@ -94,6 +94,20 @@ def _clip_lines(clips: list[dict] | None) -> list[str]:
     ]
 
 
+def _hold_lines(holds: list[dict] | None) -> list[str]:
+    """Khoảng yên vị đã đo: sản phẩm hiện rõ, đứng yên liên tục. Đặt đoạn trọn trong một khoảng."""
+    if not holds:
+        return []
+    rows = [f"- clip {h['clip']}: {h['start']:.1f}–{h['end']:.1f}s" for h in holds]
+    return [
+        "## Khoảng yên vị (harness đo: sản phẩm hiện rõ và đứng yên liên tục, tối thiểu 1,8 giây)",
+        *rows,
+        "Hãy đặt MỖI đoạn cắt nằm TRỌN trong một khoảng yên vị: như vậy không có khung rèm trống hay món đang trượt.",
+        "Ngoài các khoảng này sản phẩm đang vào hoặc ra khỏi khung, hoặc khung trống. Mỗi khoảng chỉ dùng một lần.",
+        "",
+    ]
+
+
 def _candidate_lines(candidates: list[dict] | None) -> list[str]:
     """Đoạn gợi ý do harness đo (nhiều chi tiết, khác nhau về hình). Model được ưu tiên chọn từ đây."""
     if not candidates:
@@ -115,6 +129,7 @@ def build_packet(
     tracks: list[str],
     candidates: list[dict] | None = None,
     clips: list[dict] | None = None,
+    holds: list[dict] | None = None,
 ) -> str:
     """Gói thông tin dạng văn bản (packet.md) để người hoặc agent khác lập plan.json mà không cần API.
 
@@ -146,6 +161,7 @@ def build_packet(
             f"Khoảng có lời gốc trong video nguồn: {_fmt_spans(speech)}",
             "",
             *_clip_lines(clips),
+            *_hold_lines(holds),
             *_candidate_lines(candidates),
             "## Transcript (thời gian theo video nguồn)",
             "\n".join(lines) if lines else "(không có lời)",

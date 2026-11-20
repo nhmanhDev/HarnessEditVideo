@@ -160,3 +160,46 @@ def motion_scores(scores: list[tuple[float, float]], sigs: np.ndarray) -> list[t
         m = float(np.abs(sigs[j] - sigs[j - 1]).mean()) if len(times) > 1 else 0.0
         out.append((times[i], m))
     return out
+
+
+def hold_intervals(
+    presence: list[tuple[float, float]],
+    motion: list[tuple[float, float]],
+    boundaries: list[float],
+    presence_thresh: float,
+    motion_thresh: float,
+    min_len: float = 1.8,
+    step: float = 0.5,
+) -> list[dict]:
+    """Các khoảng "yên vị": sản phẩm hiện rõ (độ lệch nền đủ cao) và đứng yên (chuyển động thấp) liên tục.
+
+    Mỗi khoảng nằm trong một clip (cắt tại ranh giới clip) và dài ít nhất `min_len` giây. Đặt đoạn cắt trọn trong
+    một khoảng như vậy thì mọi khung đều có sản phẩm, không rèm trống và không đang trượt vào hoặc ra.
+    """
+    edges = sorted(boundaries)
+    out: list[dict] = []
+    run_start: float | None = None
+    prev_t = 0.0
+    prev_clip = -1
+
+    def clip_of(t: float) -> int:
+        return sum(1 for e in edges if t >= e)
+
+    def close(end_t: float, clip: int) -> None:
+        nonlocal run_start
+        if run_start is not None and end_t - run_start >= min_len:
+            out.append({"clip": clip, "start": round(run_start, 2), "end": round(end_t, 2)})
+        run_start = None
+
+    for (t, p), (_, m) in zip(presence, motion, strict=False):
+        clip = clip_of(t)
+        if clip != prev_clip and run_start is not None:
+            close(prev_t + step, prev_clip)
+        good = p >= presence_thresh and m <= motion_thresh
+        if good and run_start is None:
+            run_start = t
+        elif not good and run_start is not None:
+            close(prev_t + step, prev_clip)
+        prev_t, prev_clip = t, clip
+    close(prev_t + step, prev_clip)
+    return out

@@ -13,7 +13,16 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .retime import Seg, empty_threshold, recenter, remap_time, snap, split_indexed, trim_empty_edges
+from .retime import (
+    Seg,
+    empty_threshold,
+    recenter,
+    remap_time,
+    snap,
+    snap_into_hold,
+    split_indexed,
+    trim_empty_edges,
+)
 from .spec import EditPlan, JobSpec, JobType, Music, Segment, TextOverlay, VoiceLine
 from .transcribe import TranscriptSegment
 
@@ -143,6 +152,7 @@ def apply_policy(
     detail: list[tuple[float, float]] | None = None,
     motion: list[tuple[float, float]] | None = None,
     sigs=None,
+    holds: list[dict] | None = None,
 ) -> PolicyResult:
     warnings: list[str] = []
     planned: list[tuple[int, float]] = []
@@ -167,6 +177,10 @@ def apply_policy(
             lo = max(e for e in clip_edges if e <= st + 1e-6)
             hi = min(e for e in clip_edges if e >= en - 1e-6)
             ms, me = recenter(st, en, detail, thresh, lo, hi, max_shift=2.5, motion=motion, drift=drift)
+            if holds:
+                # Rồi đẩy vào khoảng yên vị gần nhất (sản phẩm hiện rõ, đứng yên) trong cùng clip.
+                same_clip = [h for h in holds if lo - 1e-6 <= h["start"] and h["end"] <= hi + 1e-6]
+                ms, me = snap_into_hold(ms, me, same_clip)
             if (ms, me) != (st, en):
                 warnings.append(f"Dịch đoạn {st:.1f}–{en:.1f}s sang {ms:.1f}–{me:.1f}s để sản phẩm hiện rõ")
             # Còn rìa trống thì cắt bớt.

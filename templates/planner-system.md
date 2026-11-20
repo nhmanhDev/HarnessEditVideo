@@ -44,3 +44,7 @@ Một object JSON duy nhất, đúng khoá sau:
 ```
 
 `position` chỉ nhận `top`, `center` hoặc `bottom`. Không có khoá nào khác.
+
+# Khoảng yên vị
+
+Nếu có mục "Khoảng yên vị", đây là các khoảng harness đã đo: sản phẩm hiện rõ và đứng yên liên tục. Đặt MỖI đoạn cắt nằm trọn trong một khoảng yên vị và mỗi khoảng dùng tối đa một lần. Đừng đặt đoạn ở lúc sản phẩm đang vào hoặc ra khỏi khung, hay lúc khung còn trống. Dựa vào chữ in trên ảnh lưới để biết mỗi khoảng là món nào, rồi viết chữ đúng món đó.

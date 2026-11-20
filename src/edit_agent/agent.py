@@ -72,7 +72,11 @@ def plan_with_backend(backend: Backend, ctx: JobContext, settings: Settings, tra
     sheets = make_source_sheets(settings.ffmpeg, ctx.job_dir, ctx.src_rel, ctx.info.duration)
     cand_file = ctx.job_dir / "candidates.json"
     candidates = json.loads(cand_file.read_text(encoding="utf-8")) if cand_file.exists() else None
-    packet = build_packet(ctx.spec, ctx.info.duration, ctx.speech, ctx.transcript, track_ids, candidates, ctx.clips)
+    holds_file = ctx.job_dir / "holds.json"
+    holds = json.loads(holds_file.read_text(encoding="utf-8")) if holds_file.exists() else None
+    packet = build_packet(
+        ctx.spec, ctx.info.duration, ctx.speech, ctx.transcript, track_ids, candidates, ctx.clips, holds
+    )
     prompt = (
         packet
         + "\n\nẢnh lưới khung hình của video nguồn (mỗi ô ghi thời điểm giây trong video nguồn) "

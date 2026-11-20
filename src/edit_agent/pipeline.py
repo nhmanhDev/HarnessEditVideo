@@ -26,7 +26,8 @@ from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
 from .policy import PolicyResult, Span, apply_policy, speech_spans, uncovered_seconds
 from .render import RenderJob, render
-from .select import analyze_frames, motion_scores, pick_windows, presence_scores
+from .retime import empty_threshold
+from .select import analyze_frames, hold_intervals, motion_scores, pick_windows, presence_scores
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
 from .tts import make_provider
@@ -111,6 +112,12 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
     # Chuyển động theo thời gian: để dịch cửa sổ về lúc sản phẩm đã yên vị, không phải lúc đang trượt vào hoặc ra.
     _write_json(job_dir / "motion.json", [[round(t, 2), round(m, 3)] for t, m in motion_scores(scores, sigs)])
     np.save(job_dir / "sigs.npy", sigs)
+    # Khoảng yên vị: sản phẩm hiện rõ và đứng yên liên tục. Đặt đoạn cắt trọn trong một khoảng như vậy.
+    motion = motion_scores(scores, sigs)
+    holds = hold_intervals(
+        presence, motion, boundaries, empty_threshold(presence), 3.0 * float(np.median([m for _, m in motion]))
+    )
+    _write_json(job_dir / "holds.json", holds)
     wins = pick_windows(presence, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
     # Đoạn gợi ý không được vượt ranh giới clip.
     candidates = [w.to_dict() for w in wins if not any(w.start < b < w.end for b in boundaries)]
@@ -118,7 +125,7 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
 
     tracks = load_tracks(settings.music_dir)
     (job_dir / "packet.md").write_text(
-        build_packet(spec, info.duration, speech, transcript, sorted(tracks), candidates, clips),
+        build_packet(spec, info.duration, speech, transcript, sorted(tracks), candidates, clips, holds),
         encoding="utf-8",
     )
 
@@ -182,10 +189,12 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     detail = [(t, s) for t, s in json.loads(detail_file.read_text(encoding="utf-8"))] if detail_file.exists() else None
     motion_file = ctx.job_dir / "motion.json"
     motion = [(t, m) for t, m in json.loads(motion_file.read_text(encoding="utf-8"))] if motion_file.exists() else None
+    holds_file = ctx.job_dir / "holds.json"
+    holds = json.loads(holds_file.read_text(encoding="utf-8")) if holds_file.exists() else None
     sigs_file = ctx.job_dir / "sigs.npy"
     sigs = np.load(sigs_file) if sigs_file.exists() else None
     policy: PolicyResult = apply_policy(
-        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail, motion, sigs
+        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail, motion, sigs, holds
     )
 
     voice_files: list[tuple[float, str]] = []

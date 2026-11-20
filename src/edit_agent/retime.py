@@ -175,3 +175,28 @@ def recenter(
             if sc > best + 1e-6:
                 best_s, best = s, sc
     return best_s, best_s + length
+
+
+def snap_into_hold(start: float, end: float, holds: list[dict], max_dist: float = 2.5) -> tuple[float, float]:
+    """Đẩy cửa sổ [start, end] vào khoảng yên vị gần nhất (giữ nguyên độ dài, dịch ít nhất).
+
+    Giữ nguyên nếu đã nằm trọn trong một khoảng yên vị, hoặc không có khoảng nào đủ dài trong `max_dist` giây.
+    """
+    length = end - start
+    for h in holds:
+        if h["start"] - 1e-6 <= start and end <= h["end"] + 1e-6:
+            return start, end
+    best: tuple[float, float, float] | None = None
+    for h in holds:
+        if h["end"] - h["start"] < length - 1e-6:
+            continue
+        dist = max(0.0, h["start"] - end, start - h["end"])
+        if dist > max_dist:
+            continue
+        new_start = min(max(start, h["start"]), h["end"] - length)
+        shift = abs(new_start - start)
+        if best is None or shift < best[0]:
+            best = (shift, new_start, dist)
+    if best is None:
+        return start, end
+    return best[1], best[1] + length

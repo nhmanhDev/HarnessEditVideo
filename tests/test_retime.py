@@ -102,7 +102,7 @@ def test_recenter_prefers_a_settled_window_over_a_sliding_one():
 def test_recenter_rejects_a_shift_that_jumps_to_a_different_item():
     from edit_agent.retime import recenter
 
-    # Sản phẩm A hiện ở giây 3,5–4,5 (ngắn hơn cửa sổ), sản phẩm B ở giây 6–9. Cửa sổ ban đầu đặt ở A nhưng có khung trống ở cuối.
+    # Rèm trống: thấp; có sản phẩm: cao.
     detail = [(i * 0.5, 20.0 if (3.5 <= i * 0.5 < 4.5 or 6.0 <= i * 0.5 < 9.0) else 3.0) for i in range(30)]
     thresh = empty_threshold(detail)
 
@@ -114,3 +114,23 @@ def test_recenter_rejects_a_shift_that_jumps_to_a_different_item():
     guarded = recenter(3.4, 5.6, detail, thresh, 0.0, 15.0, max_shift=3.0, drift=drift)
     assert free[0] >= 5.6  # không có ràng buộc thì nhảy sang món B
     assert guarded[0] < 5.6  # có ràng buộc thì ở lại món A
+
+
+def test_snap_into_hold_moves_a_window_into_the_nearest_hold_keeping_length():
+    from edit_agent.retime import snap_into_hold
+
+    holds = [{"clip": 0, "start": 10.0, "end": 14.0}, {"clip": 0, "start": 20.0, "end": 22.5}]
+    assert snap_into_hold(8.5, 10.7, holds) == (10.0, 12.2)  # đẩy vào đầu khoảng thứ nhất
+    assert snap_into_hold(11.0, 13.2, holds) == (11.0, 13.2)  # đã nằm trọn trong khoảng
+    assert snap_into_hold(30.0, 32.2, holds) == (30.0, 32.2)  # xa mọi khoảng: giữ nguyên
+
+
+def test_hold_intervals_split_at_clip_boundaries_and_need_minimum_length():
+    from edit_agent.select import hold_intervals
+
+    presence = [(i * 0.5, 20.0) for i in range(20)]  # 10 giây, sản phẩm luôn hiện
+    motion = [(i * 0.5, 1.0) for i in range(20)]
+    holds = hold_intervals(presence, motion, [5.0], 10.0, 3.0)
+    assert [(h["clip"], h["start"], h["end"]) for h in holds] == [(0, 0.0, 5.0), (1, 5.0, 10.0)]
+    short = hold_intervals(presence[:3], motion[:3], [], 10.0, 3.0)
+    assert short == []  # 1,5 giây < 1,8 giây
