@@ -138,7 +138,8 @@ class OpenAITTS:
 def make_provider(name: str, voice: str) -> TTSProvider:
     if name == "voicestudio":
         base = os.environ.get("TTS_BASE_URL", "http://127.0.0.1:8891")
-        engine = os.environ.get("TTS_ENGINE", "vieneu")
+        # omnivoice đọc tiếng Việt chính xác hơn vieneu trên cùng 4 câu thử (65% so với 42% từ khớp, 2026-11-20).
+        engine = os.environ.get("TTS_ENGINE", "omnivoice")
         token = os.environ.get("VOICE_STUDIO_TOKEN") or None
         return VoiceStudioTTS(base_url=base, voice=voice, engine=engine, app_token=token)
     if name == "openai":
