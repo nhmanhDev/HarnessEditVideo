@@ -149,3 +149,14 @@ def presence_scores(
         plate = np.median(sigs[idx], axis=0)
         out += [(times[i], float(np.abs(sigs[i] - plate).mean())) for i in idx]
     return sorted(out)
+
+
+def motion_scores(scores: list[tuple[float, float]], sigs: np.ndarray) -> list[tuple[float, float]]:
+    """Chuyển động giữa hai mẫu liên tiếp: độ lệch trung bình của chữ ký hình. Cao = hình đang trượt hoặc đổi nhanh."""
+    times = [t for t, _ in scores]
+    out: list[tuple[float, float]] = []
+    for i in range(len(times)):
+        j = i if i > 0 else 1
+        m = float(np.abs(sigs[j] - sigs[j - 1]).mean()) if len(times) > 1 else 0.0
+        out.append((times[i], m))
+    return out

@@ -24,7 +24,7 @@ from .music import Track, load_tracks
 from .planner import build_packet, plan_edit
 from .policy import PolicyResult, Span, apply_policy, speech_spans, uncovered_seconds
 from .render import RenderJob, render
-from .select import analyze_frames, pick_windows, presence_scores
+from .select import analyze_frames, motion_scores, pick_windows, presence_scores
 from .spec import EditPlan, JobSpec
 from .transcribe import TranscriptSegment, transcribe
 from .tts import make_provider
@@ -106,6 +106,8 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
     # Độ lệch so với phông của từng clip: cao = có sản phẩm trong khung. Dùng để chọn đoạn gợi ý và cắt rìa khung trống.
     presence = presence_scores(scores, sigs, boundaries)
     _write_json(job_dir / "detail.json", [[round(t, 2), round(s, 3)] for t, s in presence])
+    # Chuyển động theo thời gian: để dịch cửa sổ về lúc sản phẩm đã yên vị, không phải lúc đang trượt vào hoặc ra.
+    _write_json(job_dir / "motion.json", [[round(t, 2), round(m, 3)] for t, m in motion_scores(scores, sigs)])
     wins = pick_windows(presence, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
     # Đoạn gợi ý không được vượt ranh giới clip.
     candidates = [w.to_dict() for w in wins if not any(w.start < b < w.end for b in boundaries)]
@@ -175,8 +177,10 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     boundaries = [c["end"] for c in ctx.clips[:-1]]
     detail_file = ctx.job_dir / "detail.json"
     detail = [(t, s) for t, s in json.loads(detail_file.read_text(encoding="utf-8"))] if detail_file.exists() else None
+    motion_file = ctx.job_dir / "motion.json"
+    motion = [(t, m) for t, m in json.loads(motion_file.read_text(encoding="utf-8"))] if motion_file.exists() else None
     policy: PolicyResult = apply_policy(
-        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail
+        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail, motion
     )
 
     voice_files: list[tuple[float, str]] = []

@@ -120,6 +120,12 @@ def snap(t: float, points: list[float], tol: float) -> float:
     return best if abs(best - t) <= tol else t
 
 
+def _level(series: list[tuple[float, float]], times: list[float], t0: float, t1: float) -> float:
+    i0, i1 = bisect.bisect_left(times, t0), bisect.bisect_right(times, t1)
+    vals = [d for _, d in series[i0:i1]] or [_detail_at(series, times, (t0 + t1) / 2)]
+    return float(np.mean(vals))
+
+
 def recenter(
     start: float,
     end: float,
@@ -129,30 +135,40 @@ def recenter(
     hi: float,
     max_shift: float = 1.2,
     step: float = 0.25,
+    motion: list[tuple[float, float]] | None = None,
+    motion_ref: float = 3.0,
 ) -> tuple[float, float]:
-    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ sản phẩm hiện rõ nhất.
+    """Dịch cửa sổ [start, end] (giữ nguyên độ dài) trong khoảng [lo, hi] về chỗ sản phẩm hiện rõ và đứng yên.
 
-    Điểm của một cửa sổ là độ hiện diện trung bình, bị phạt nặng nếu đầu hoặc cuối cửa sổ là khung trống.
-    Chọn dịch ít nhất khi điểm bằng nhau. Cửa sổ không đổi nếu không có chỗ tốt hơn.
+    Điểm của cửa sổ là độ hiện diện trung bình, chia cho (1 + chuyển động / motion_ref) để tránh đoạn sản phẩm
+    đang trượt vào hoặc ra. Phạt nặng nếu đầu hoặc cuối cửa sổ là khung trống hoặc đang chuyển động mạnh.
+    Chọn dịch ít nhất khi điểm bằng nhau; cửa sổ không đổi nếu không có chỗ tốt hơn.
     """
     if not detail:
         return start, end
     length = end - start
     times = [t for t, _ in detail]
-
-    def level(t0: float, t1: float) -> float:
-        i0, i1 = bisect.bisect_left(times, t0), bisect.bisect_right(times, t1)
-        vals = [d for _, d in detail[i0:i1]] or [_detail_at(detail, times, (t0 + t1) / 2)]
-        return float(np.mean(vals))
+    mtimes = [t for t, _ in motion] if motion else []
+    mthr = 2.5 * float(np.median([m for _, m in motion])) if motion else 0.0
 
     def score(s: float) -> float:
-        base = level(s, s + length)
-        edges_ok = level(s, s + 0.5) >= thresh and level(s + length - 0.5, s + length) >= thresh
-        return base if edges_ok else base * 0.5
+        base = _level(detail, times, s, s + length)
+        if motion:
+            base = base / (1.0 + _level(motion, mtimes, s, s + length) / motion_ref)
+        ok = (
+            _level(detail, times, s, s + 0.5) >= thresh
+            and _level(detail, times, s + length - 0.5, s + length) >= thresh
+        )
+        if motion:
+            ok = (
+                ok
+                and _level(motion, mtimes, s, s + 0.5) <= mthr
+                and _level(motion, mtimes, s + length - 0.5, s + length) <= mthr
+            )
+        return base if ok else base * 0.5
 
     best_s, best = start, score(start)
-    n = int(max_shift / step)
-    for k in range(1, n + 1):
+    for k in range(1, int(max_shift / step) + 1):
         for s in (start - k * step, start + k * step):
             if s < lo or s + length > hi:
                 continue

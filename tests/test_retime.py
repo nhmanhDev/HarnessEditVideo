@@ -87,3 +87,13 @@ def test_recenter_keeps_window_when_nothing_is_better():
 
     detail = [(i * 0.5, 10.0) for i in range(30)]
     assert recenter(3.0, 5.2, detail, empty_threshold(detail), 0.0, 15.0) == (3.0, 5.2)
+
+
+def test_recenter_prefers_a_settled_window_over_a_sliding_one():
+    from edit_agent.retime import recenter
+
+    # Sản phẩm hiện ở giây 4–10. Giây 4–6 đang trượt vào (chuyển động mạnh), từ giây 6 trở đi đứng yên.
+    detail = [(i * 0.5, 20.0 if 4.0 <= i * 0.5 < 10.0 else 3.0) for i in range(30)]
+    motion = [(i * 0.5, 15.0 if 4.0 <= i * 0.5 < 6.0 else 1.0) for i in range(30)]
+    s, e = recenter(4.2, 6.4, detail, empty_threshold(detail), lo=0.0, hi=15.0, motion=motion)
+    assert s > 4.2  # dời về phía lúc sản phẩm đã yên vị (dịch tối đa 1,2 giây)

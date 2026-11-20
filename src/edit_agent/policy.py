@@ -121,6 +121,7 @@ def apply_policy(
     known_tracks: set[str],
     boundaries: list[float] | None = None,
     detail: list[tuple[float, float]] | None = None,
+    motion: list[tuple[float, float]] | None = None,
 ) -> PolicyResult:
     warnings: list[str] = []
     planned: list[tuple[int, float]] = []
@@ -143,7 +144,7 @@ def apply_policy(
             # Trước hết dịch cửa sổ trong cùng clip về chỗ sản phẩm hiện rõ (giữ nguyên độ dài đoạn).
             lo = max(e for e in clip_edges if e <= st + 1e-6)
             hi = min(e for e in clip_edges if e >= en - 1e-6)
-            ms, me = recenter(st, en, detail, thresh, lo, hi)
+            ms, me = recenter(st, en, detail, thresh, lo, hi, motion=motion)
             if (ms, me) != (st, en):
                 warnings.append(f"Dịch đoạn {st:.1f}–{en:.1f}s sang {ms:.1f}–{me:.1f}s để sản phẩm hiện rõ")
             # Còn rìa trống thì cắt bớt.
