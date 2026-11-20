@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .clips import split_at_boundaries
+from .retime import Seg, empty_threshold, remap_time, snap, split_indexed, trim_empty_edges
 from .spec import EditPlan, JobSpec, JobType, Music, Segment, TextOverlay, VoiceLine
 from .transcribe import TranscriptSegment
 
@@ -120,26 +120,68 @@ def apply_policy(
     src_duration: float,
     known_tracks: set[str],
     boundaries: list[float] | None = None,
+    detail: list[tuple[float, float]] | None = None,
 ) -> PolicyResult:
     warnings: list[str] = []
-    segments = plan.segments
+    planned: list[tuple[int, float]] = []
+    items: list[tuple[int, float, float]] = []
+    for i, s in enumerate(plan.segments):
+        end = min(s.src_end, src_duration)
+        if end <= s.src_start:
+            raise ValueError(
+                f"Đoạn cắt không hợp lệ: {s.src_start:.2f}–{s.src_end:.2f}s, video dài {src_duration:.2f}s"
+            )
+        planned.append((i, end - s.src_start))
+        items.append((i, s.src_start, end))
+
+    if detail:
+        # Cắt rìa khung trống (rèm, tay đang kéo đồ đi) ở đầu và cuối mỗi đoạn.
+        thresh = empty_threshold(detail)
+        trimmed = []
+        for i, st, en in items:
+            ns, ne = trim_empty_edges(st, en, detail, thresh)
+            if (ns, ne) != (st, en):
+                warnings.append(f"Cắt rìa trống đoạn {st:.1f}–{en:.1f}s còn {ns:.1f}–{ne:.1f}s")
+            trimmed.append((i, ns, ne))
+        items = trimmed
+
     if boundaries:
         # Nguồn gồm nhiều clip nối liền: đoạn cắt không được vượt qua ranh giới clip.
-        pairs, notes = split_at_boundaries([(s.src_start, s.src_end) for s in segments], boundaries)
+        actual, notes = split_indexed(items, boundaries)
         warnings += notes
-        if not pairs:
+        if not actual:
             raise ValueError("Mọi đoạn cắt đều vượt ranh giới clip")
-        segments = [Segment(src_start=a, src_end=b) for a, b in pairs]
+    else:
+        actual = [Seg(i, st, en) for i, st, en in items]
+    segments = [Segment(src_start=s.start, src_end=s.end) for s in actual]
     pieces, out_seconds = build_pieces(segments, src_duration)
     if out_seconds > spec.max_output_seconds:
         raise ValueError(f"Video đầu ra {out_seconds:.1f}s dài hơn giới hạn {spec.max_output_seconds:.0f}s")
 
+    def remap(t: float) -> float:
+        return min(remap_time(t, planned, actual, out_seconds), out_seconds)
+
+    # Thời điểm chữ trong kế hoạch tính theo timeline lý tưởng; dịch theo các đoạn đã rút ngắn rồi bám điểm cắt.
+    cut_starts = [p.out_offset for p in pieces]
+    cut_ends = [p.out_offset + (p.src_end - p.src_start) for p in pieces]
     texts: list[TextOverlay] = []
     for t in plan.texts:
-        if t.start >= out_seconds:
+        start, end = remap(t.start), remap(t.end)
+        if start >= out_seconds - 0.3:
             warnings.append(f"Bỏ chữ '{t.text[:30]}': bắt đầu sau khi video kết thúc")
             continue
-        texts.append(t.model_copy(update={"end": min(t.end, out_seconds)}))
+        start, end = snap(start, cut_starts, 0.6), snap(end, cut_ends, 0.6)
+        if end - start < 1.0:
+            end = min(out_seconds, start + 1.5)
+        texts.append(t.model_copy(update={"start": start, "end": min(end, out_seconds)}))
+    plan = plan.model_copy(
+        update={
+            "voice_lines": [
+                line.model_copy(update={"start": remap(line.start), "end": remap(line.end)})
+                for line in plan.voice_lines
+            ]
+        }
+    )
 
     music = plan.music
     if music.track and music.track not in known_tracks:

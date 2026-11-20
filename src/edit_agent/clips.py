@@ -95,17 +95,7 @@ def split_at_boundaries(
     segments: list[tuple[float, float]], boundaries: list[float], min_len: float = 0.6
 ) -> tuple[list[tuple[float, float]], list[str]]:
     """Cắt ngắn đoạn vượt ranh giới clip (giữ phần đầu); bỏ nếu phần còn lại quá ngắn."""
-    out: list[tuple[float, float]] = []
-    notes: list[str] = []
-    for start, end in segments:
-        new_end = end
-        for b in sorted(boundaries):
-            if start < b < new_end:
-                new_end = b
-        if new_end - start < min_len:
-            notes.append(f"Bỏ đoạn {start:.1f}–{end:.1f}s: vượt ranh giới clip, phần còn lại quá ngắn")
-            continue
-        if new_end < end:
-            notes.append(f"Cắt đoạn {start:.1f}–{end:.1f}s còn {start:.1f}–{new_end:.1f}s: không vượt ranh giới clip")
-        out.append((start, new_end))
-    return out, notes
+    from .retime import split_indexed
+
+    segs, notes = split_indexed([(i, s, e) for i, (s, e) in enumerate(segments)], boundaries, min_len)
+    return [(s.start, s.end) for s in segs], notes

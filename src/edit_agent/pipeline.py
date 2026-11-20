@@ -102,6 +102,8 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
 
     # Đoạn gợi ý: nhiều chi tiết, khác nhau về hình. Đưa cho model để tránh khung trống và cảnh lặp.
     scores, sigs = analyze_frames(ffmpeg, src, info.duration)
+    # Độ chi tiết theo thời gian: dùng lúc dựng để cắt rìa khung trống ở đầu và cuối mỗi đoạn.
+    _write_json(job_dir / "detail.json", [[round(t, 2), round(s, 3)] for t, s in scores])
     boundaries = [c["end"] for c in clips[:-1]]
     wins = pick_windows(scores, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
     # Đoạn gợi ý không được vượt ranh giới clip.
@@ -170,7 +172,11 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     job_dir = ctx.job_dir
     tracks = load_tracks(settings.music_dir)
     boundaries = [c["end"] for c in ctx.clips[:-1]]
-    policy: PolicyResult = apply_policy(ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries)
+    detail_file = ctx.job_dir / "detail.json"
+    detail = [(t, s) for t, s in json.loads(detail_file.read_text(encoding="utf-8"))] if detail_file.exists() else None
+    policy: PolicyResult = apply_policy(
+        ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries, detail
+    )
 
     voice_files: list[tuple[float, str]] = []
     if policy.voice_lines:
