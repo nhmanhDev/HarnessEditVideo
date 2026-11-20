@@ -96,9 +96,7 @@ def write_caption_files(job_dir: Path, i: int, sub: Subtitle, vertical: bool) ->
         (job_dir / f"texts/s{i}_{k}.txt").write_text(_wrap(" ".join(words[:k]), vertical), encoding="utf-8")
 
 
-def caption_filters(
-    i: int, sub: Subtitle, style: Style, variants: list[tuple[float, float, str]]
-) -> list[str]:
+def caption_filters(i: int, sub: Subtitle, style: Style, variants: list[tuple[float, float, str]]) -> list[str]:
     h = style.height
     size = int(h * 0.034)
     filters = []

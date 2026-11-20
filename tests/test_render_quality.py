@@ -35,9 +35,7 @@ def test_crop_fit_keeps_the_old_full_bleed_chain():
 
 
 def test_final_audio_is_loudness_normalised_to_target():
-    graph, _v, audio = build_filter_graph(
-        _job(keep_audio=True, music_file="music/a.mp3", loudness_lufs=-14.0)
-    )
+    graph, _v, audio = build_filter_graph(_job(keep_audio=True, music_file="music/a.mp3", loudness_lufs=-14.0))
     assert audio == "afinal"
     assert "loudnorm=I=-14.0:TP=-1.5:LRA=11" in graph
 
@@ -48,9 +46,7 @@ def test_loudness_normalisation_can_be_disabled():
 
 
 def test_music_has_fade_in_and_fade_out():
-    graph, _v, _a = build_filter_graph(
-        _job(music_file="music/a.mp3", music_fade_in_s=0.5, music_fade_out_s=1.5)
-    )
+    graph, _v, _a = build_filter_graph(_job(music_file="music/a.mp3", music_fade_in_s=0.5, music_fade_out_s=1.5))
     assert "afade=t=in:st=0:d=0.50" in graph
     # Fade ra kết thúc tại (độ dài - 1,5 giây).
     assert "afade=t=out:st=2.500:d=1.50" in graph

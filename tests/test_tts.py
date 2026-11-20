@@ -54,9 +54,7 @@ def test_voicestudio_lists_available_voices_when_name_unknown(tmp_path):
     def handler(req):
         return httpx.Response(200, json=[{"id": "v-1", "name": "Hoa"}])
 
-    tts = VoiceStudioTTS(
-        base_url="http://test", voice="ai-do", client=_client(handler), sleep=lambda _s: None
-    )
+    tts = VoiceStudioTTS(base_url="http://test", voice="ai-do", client=_client(handler), sleep=lambda _s: None)
     with pytest.raises(TTSError, match="Hoa"):
         tts.synthesize("x", tmp_path / "v.wav")
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .clips import split_at_boundaries
 from .spec import EditPlan, JobSpec, JobType, Music, Segment, TextOverlay, VoiceLine
 from .transcribe import TranscriptSegment
 
@@ -51,9 +52,7 @@ class PolicyResult:
         return self.keep_audio or bool(self.voice_lines)
 
 
-def speech_spans(
-    transcript: list[TranscriptSegment], max_no_speech: float = 0.5, gap: float = 0.3
-) -> list[Span]:
+def speech_spans(transcript: list[TranscriptSegment], max_no_speech: float = 0.5, gap: float = 0.3) -> list[Span]:
     """Các khoảng có tiếng nói ở video nguồn, đã gộp các đoạn liền nhau."""
     raw = sorted((s.start, s.end) for s in transcript if s.no_speech_prob < max_no_speech and s.end > s.start)
     merged: list[Span] = []
@@ -76,8 +75,7 @@ def build_pieces(segments: list[Segment], src_duration: float) -> tuple[list[Pie
         end = min(seg.src_end, src_duration)
         if end <= seg.src_start:
             raise ValueError(
-                f"Đoạn cắt không hợp lệ: {seg.src_start:.2f}–{seg.src_end:.2f}s, "
-                f"video dài {src_duration:.2f}s"
+                f"Đoạn cắt không hợp lệ: {seg.src_start:.2f}–{seg.src_end:.2f}s, video dài {src_duration:.2f}s"
             )
         pieces.append(Piece(seg.src_start, end, offset))
         offset += end - seg.src_start
@@ -121,9 +119,18 @@ def apply_policy(
     transcript: list[TranscriptSegment],
     src_duration: float,
     known_tracks: set[str],
+    boundaries: list[float] | None = None,
 ) -> PolicyResult:
     warnings: list[str] = []
-    pieces, out_seconds = build_pieces(plan.segments, src_duration)
+    segments = plan.segments
+    if boundaries:
+        # Nguồn gồm nhiều clip nối liền: đoạn cắt không được vượt qua ranh giới clip.
+        pairs, notes = split_at_boundaries([(s.src_start, s.src_end) for s in segments], boundaries)
+        warnings += notes
+        if not pairs:
+            raise ValueError("Mọi đoạn cắt đều vượt ranh giới clip")
+        segments = [Segment(src_start=a, src_end=b) for a, b in pairs]
+    pieces, out_seconds = build_pieces(segments, src_duration)
     if out_seconds > spec.max_output_seconds:
         raise ValueError(f"Video đầu ra {out_seconds:.1f}s dài hơn giới hạn {spec.max_output_seconds:.0f}s")
 
@@ -183,7 +190,9 @@ def apply_policy(
                 subtitles.append(Subtitle(line.start, line.end, line.text))
             subtitles.sort(key=lambda s: s.start)
 
-    final_plan = plan.model_copy(update={"texts": texts, "voice_lines": voice_lines, "music": music})
+    final_plan = plan.model_copy(
+        update={"segments": segments, "texts": texts, "voice_lines": voice_lines, "music": music}
+    )
     return PolicyResult(
         plan=final_plan,
         pieces=pieces,

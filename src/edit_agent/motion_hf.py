@@ -42,9 +42,7 @@ def _words_html(text: str) -> str:
         out += [("hi", w) for w in m.group(1).split()]
         pos = m.end()
     out += [("w", w) for w in text[pos:].split()]
-    return "".join(
-        f'<span class="word{" hi" if kind == "hi" else ""}">{html.escape(w)}</span>' for kind, w in out
-    )
+    return "".join(f'<span class="word{" hi" if kind == "hi" else ""}">{html.escape(w)}</span>' for kind, w in out)
 
 
 _POS_TOP = {"top": "300px", "center": "1000px", "bottom": "1650px"}

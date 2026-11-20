@@ -96,9 +96,7 @@ class AnthropicBackend:
         for rel in images:
             data = base64.b64encode((cwd / rel).read_bytes()).decode("ascii")
             content.append({"type": "text", "text": f"Ảnh {rel}:"})
-            content.append(
-                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": data}}
-            )
+            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": data}})
         content.append({"type": "text", "text": prompt})
         resp = self._client.messages.create(
             model=self._model, max_tokens=self._max_tokens, messages=[{"role": "user", "content": content}]

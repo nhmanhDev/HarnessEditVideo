@@ -178,9 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    parser = argparse.ArgumentParser(
-        prog="edit-agent", description="Dựng video từ link Drive hoặc file cục bộ."
-    )
+    parser = argparse.ArgumentParser(prog="edit-agent", description="Dựng video từ link Drive hoặc file cục bộ.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     prep = sub.add_parser("prepare", help="Bước 1: nhận video, nhận dạng lời, lấy khung hình, viết packet.md")

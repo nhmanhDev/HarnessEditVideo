@@ -22,9 +22,7 @@ class JobSpec(BaseModel):
     width: int = 1440
     height: int = 2560
     fps: int = 30
-    fit: Literal["blur", "crop"] = Field(
-        default="blur", description="Khung ngang: nền mờ (giữ hình) hoặc cắt giữa"
-    )
+    fit: Literal["blur", "crop"] = Field(default="blur", description="Khung ngang: nền mờ (giữ hình) hoặc cắt giữa")
     captions: bool = False
     max_output_seconds: float = Field(default=60.0, gt=0)
     language: str | None = Field(default=None, description="Mã ngôn ngữ nói, ví dụ vi; để trống thì tự nhận")

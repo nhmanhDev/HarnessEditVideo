@@ -15,8 +15,9 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .clips import combine_clips
 from .config import Settings, require_tool
-from .intake import fetch_source, new_job_dir
+from .intake import fetch_folder, fetch_source, is_folder_input, new_job_dir
 from .media import Probe, extract_audio_wav, extract_frames, probe
 from .motion_hf import render_overlay
 from .music import Track, load_tracks
@@ -38,6 +39,7 @@ class JobContext:
     transcript: list[TranscriptSegment]
     speech: list[Span]
     frames: list[tuple[float, Path]]
+    clips: list[dict] = field(default_factory=list)  # [{index, name, start, end}] trong video nguồn gộp
 
 
 @dataclass
@@ -71,8 +73,18 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
     job_dir = new_job_dir(settings, label)
     _write_json(job_dir / "spec.json", spec.model_dump(mode="json"))
 
-    src = fetch_source(spec.input, job_dir)
+    clips: list[dict] | None = None
+    if is_folder_input(spec.input):
+        # Thư mục nhiều clip: gộp thành một video nguồn, ghi lại ranh giới từng clip.
+        src = job_dir / "input" / "source.mp4"
+        clips = combine_clips(ffmpeg, ffprobe, fetch_folder(spec.input, job_dir), src, job_dir / "input" / "norm")
+    else:
+        src = fetch_source(spec.input, job_dir)
     info = probe(ffprobe, src)
+    if clips is None:
+        name = "clip" if spec.input.startswith("http") else Path(spec.input).name
+        clips = [{"index": 0, "name": name, "start": 0.0, "end": round(info.duration, 3)}]
+    _write_json(job_dir / "clips.json", clips)
     _write_json(
         job_dir / "probe.json",
         {"duration": info.duration, "width": info.width, "height": info.height, "has_audio": info.has_audio},
@@ -90,13 +102,16 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
 
     # Đoạn gợi ý: nhiều chi tiết, khác nhau về hình. Đưa cho model để tránh khung trống và cảnh lặp.
     scores, sigs = analyze_frames(ffmpeg, src, info.duration)
-    wins = pick_windows(scores, 10, 2.2, info.duration, sigs=sigs, min_diff=8.0)
-    candidates = [w.to_dict() for w in wins]
+    boundaries = [c["end"] for c in clips[:-1]]
+    wins = pick_windows(scores, min(30, max(10, 2 * len(clips))), 2.2, info.duration, sigs=sigs, min_diff=8.0)
+    # Đoạn gợi ý không được vượt ranh giới clip.
+    candidates = [w.to_dict() for w in wins if not any(w.start < b < w.end for b in boundaries)]
     _write_json(job_dir / "candidates.json", candidates)
 
     tracks = load_tracks(settings.music_dir)
     (job_dir / "packet.md").write_text(
-        build_packet(spec, info.duration, speech, transcript, sorted(tracks), candidates), encoding="utf-8"
+        build_packet(spec, info.duration, speech, transcript, sorted(tracks), candidates, clips),
+        encoding="utf-8",
     )
 
     return JobContext(
@@ -107,6 +122,7 @@ def prepare(settings: Settings, spec: JobSpec) -> JobContext:
         transcript=transcript,
         speech=speech,
         frames=frames,
+        clips=clips,
     )
 
 
@@ -114,12 +130,12 @@ def load_context(job_dir: Path) -> JobContext:
     spec = JobSpec.model_validate_json((job_dir / "spec.json").read_text(encoding="utf-8"))
     pr = json.loads((job_dir / "probe.json").read_text(encoding="utf-8"))
     info = Probe(duration=pr["duration"], width=pr["width"], height=pr["height"], has_audio=pr["has_audio"])
-    transcript = [
-        TranscriptSegment(**t) for t in json.loads((job_dir / "transcript.json").read_text(encoding="utf-8"))
-    ]
+    transcript = [TranscriptSegment(**t) for t in json.loads((job_dir / "transcript.json").read_text(encoding="utf-8"))]
     frame_index = json.loads((job_dir / "frames.json").read_text(encoding="utf-8"))
     frames = [(f["t"], job_dir / "frames" / f["file"]) for f in frame_index]
     src = next((job_dir / "input").glob("source.*"))
+    clips_file = job_dir / "clips.json"
+    clips = json.loads(clips_file.read_text(encoding="utf-8")) if clips_file.exists() else []
     return JobContext(
         job_dir=job_dir,
         spec=spec,
@@ -128,6 +144,7 @@ def load_context(job_dir: Path) -> JobContext:
         transcript=transcript,
         speech=speech_spans(transcript),
         frames=frames,
+        clips=clips,
     )
 
 
@@ -152,7 +169,8 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     ffmpeg = require_tool(settings.ffmpeg)
     job_dir = ctx.job_dir
     tracks = load_tracks(settings.music_dir)
-    policy: PolicyResult = apply_policy(ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks))
+    boundaries = [c["end"] for c in ctx.clips[:-1]]
+    policy: PolicyResult = apply_policy(ctx.spec, plan, ctx.transcript, ctx.info.duration, set(tracks), boundaries)
 
     voice_files: list[tuple[float, str]] = []
     if policy.voice_lines:
@@ -170,12 +188,8 @@ def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResul
     needs_bed = (not policy.keep_audio) and uncovered_seconds(policy.voice_lines, policy.output_seconds) > 1.0
     if needs_bed and not policy.plan.music.track and tracks:
         auto = sorted(tracks)[0]
-        policy.plan = policy.plan.model_copy(
-            update={"music": policy.plan.music.model_copy(update={"track": auto})}
-        )
-        policy.warnings.append(
-            f"Có khoảng không lời quá 1 giây: tự đặt nhạc nền '{auto}' từ kho có giấy phép"
-        )
+        policy.plan = policy.plan.model_copy(update={"music": policy.plan.music.model_copy(update={"track": auto})})
+        policy.warnings.append(f"Có khoảng không lời quá 1 giây: tự đặt nhạc nền '{auto}' từ kho có giấy phép")
 
     music_rel: str | None = None
     if policy.plan.music.track:
@@ -231,9 +245,7 @@ def run_job(settings: Settings, spec: JobSpec, plan_override: EditPlan | None = 
     return render_plan(settings, ctx, plan)
 
 
-def _write_report(
-    job_dir: Path, spec: JobSpec, src_duration: float, policy: PolicyResult, tracks: dict
-) -> None:
+def _write_report(job_dir: Path, spec: JobSpec, src_duration: float, policy: PolicyResult, tracks: dict) -> None:
     lines = [
         f"# Báo cáo job {job_dir.name}",
         "",

@@ -15,7 +15,7 @@ from .llm import Backend, LLMError
 from .pipeline import JobContext, prepare, render_plan
 from .planner import PlannerError, build_packet, extract_json_object
 from .qa import Measure, judge, measure
-from .sheets import make_sheet
+from .sheets import make_sheet, make_source_sheets
 from .spec import EditPlan, JobSpec, JobType
 
 CRITIC_PROMPT_PATH = REPO_ROOT / "templates" / "critic-system.md"
@@ -67,20 +67,19 @@ def _json_with_retry(backend: Backend, prompt: str, images: list[str], cwd: Path
     raise PlannerError(f"Model không trả kế hoạch hợp lệ sau 2 lần: {last}")
 
 
-def plan_with_backend(
-    backend: Backend, ctx: JobContext, settings: Settings, track_ids: list[str]
-) -> EditPlan:
+def plan_with_backend(backend: Backend, ctx: JobContext, settings: Settings, track_ids: list[str]) -> EditPlan:
     _ensure_font(ctx, settings)
-    sheet = make_sheet(settings.ffmpeg, ctx.job_dir, ctx.src_rel, "sheet_source.jpg", ctx.info.duration)
+    sheets = make_source_sheets(settings.ffmpeg, ctx.job_dir, ctx.src_rel, ctx.info.duration)
     cand_file = ctx.job_dir / "candidates.json"
     candidates = json.loads(cand_file.read_text(encoding="utf-8")) if cand_file.exists() else None
-    packet = build_packet(ctx.spec, ctx.info.duration, ctx.speech, ctx.transcript, track_ids, candidates)
+    packet = build_packet(ctx.spec, ctx.info.duration, ctx.speech, ctx.transcript, track_ids, candidates, ctx.clips)
     prompt = (
         packet
-        + "\n\nẢnh lưới khung hình của video nguồn (mỗi ô ghi thời điểm giây) ở danh sách ảnh bên dưới."
+        + "\n\nẢnh lưới khung hình của video nguồn (mỗi ô ghi thời điểm giây trong video nguồn) "
+        + "ở danh sách ảnh bên dưới, theo thứ tự thời gian."
         + _PLAN_TAIL
     )
-    return _json_with_retry(backend, prompt, [sheet], ctx.job_dir, EditPlan.model_validate)
+    return _json_with_retry(backend, prompt, sheets, ctx.job_dir, EditPlan.model_validate)
 
 
 def _review_prompt(ctx: JobContext, plan: EditPlan, m: Measure, track_ids: list[str]) -> str:
@@ -109,14 +108,13 @@ def _review_prompt(ctx: JobContext, plan: EditPlan, m: Measure, track_ids: list[
                 ensure_ascii=False,
             ),
             "",
-            "Ảnh 1: lưới khung hình video NGUỒN. Ảnh 2: lưới khung hình video ĐẦU RA. Trả về JSON chấm điểm.",
+            "Các ảnh đầu (sheet_source*): lưới khung hình video NGUỒN theo thứ tự thời gian. "
+            "Ảnh cuối (sheet_out*): lưới khung hình video ĐẦU RA. Trả về JSON chấm điểm.",
         ]
     )
 
 
-def review(
-    backend: Backend, ctx: JobContext, plan: EditPlan, m: Measure, out_sheet: str, track_ids: list[str]
-):
+def review(backend: Backend, ctx: JobContext, plan: EditPlan, m: Measure, out_sheet: str, track_ids: list[str]):
     def validate(d: dict):
         score = float(d["score"])
         revised = d.get("plan")
@@ -129,7 +127,7 @@ def review(
     return _json_with_retry(
         backend,
         _review_prompt(ctx, plan, m, track_ids),
-        ["sheet_source.jpg", out_sheet],
+        [p.name for p in sorted(ctx.job_dir.glob("sheet_source*.jpg"))] + [out_sheet],
         ctx.job_dir,
         validate,
     )

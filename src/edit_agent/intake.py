@@ -24,6 +24,31 @@ def new_job_dir(settings: Settings, label: str) -> Path:
     return job
 
 
+def is_folder_input(value: str) -> bool:
+    """Thư mục Drive (link /folders/) hoặc thư mục trên máy."""
+    if is_drive_link(value):
+        return "/folders/" in value
+    return Path(value).expanduser().is_dir()
+
+
+def fetch_folder(value: str, job_dir: Path) -> list[Path]:
+    """Tải (Drive) hoặc liệt kê (máy) mọi video trong thư mục, theo thứ tự tên tự nhiên."""
+    from .clips import list_videos
+
+    dst = job_dir / "input" / "clips"
+    dst.mkdir(parents=True, exist_ok=True)
+    if is_drive_link(value):
+        import gdown
+
+        gdown.download_folder(url=value, output=str(dst), quiet=True, use_cookies=False)
+        videos = list_videos(dst)
+    else:
+        videos = list_videos(Path(value).expanduser())
+    if not videos:
+        raise RuntimeError("Thư mục không có video nào. Thư mục Drive phải để 'Bất kỳ ai có đường liên kết'.")
+    return videos
+
+
 def fetch_source(value: str, job_dir: Path) -> Path:
     """Đưa video nguồn vào thư mục job, đặt tên source.<đuôi>."""
     dst_dir = job_dir / "input"

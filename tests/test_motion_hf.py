@@ -36,9 +36,7 @@ def test_html_builds_karaoke_caption_per_word():
 
 def test_overlay_returns_none_without_npx(tmp_path, monkeypatch):
     monkeypatch.setattr(motion_hf.shutil, "which", lambda _name: None)
-    out = render_overlay(
-        tmp_path, [TextOverlay(text="x", start=0, end=2, position="top")], [], 3.0, 1440, 2560
-    )
+    out = render_overlay(tmp_path, [TextOverlay(text="x", start=0, end=2, position="top")], [], 3.0, 1440, 2560)
     assert out is None
 
 

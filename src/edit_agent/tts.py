@@ -67,9 +67,7 @@ class VoiceStudioTTS:
     def resolve_voice(self) -> str:
         if self._voice_id:
             return self._voice_id
-        data = self._check(
-            self._client.get(f"{self._base}/api/voices", headers=self._headers()), "lấy danh sách giọng"
-        )
+        data = self._check(self._client.get(f"{self._base}/api/voices", headers=self._headers()), "lấy danh sách giọng")
         wanted = self._voice.strip().lower()
         for v in data:
             if v.get("id") == self._voice or str(v.get("name", "")).strip().lower() == wanted:

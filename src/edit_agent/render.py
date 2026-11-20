@@ -108,9 +108,7 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
     speech_label: str | None = None
     if job.keep_audio:
         for i, p in enumerate(job.pieces):
-            audio_parts.append(
-                f"[0:a]atrim=start={p.src_start:.3f}:end={p.src_end:.3f},asetpts=PTS-STARTPTS[a{i}]"
-            )
+            audio_parts.append(f"[0:a]atrim=start={p.src_start:.3f}:end={p.src_end:.3f},asetpts=PTS-STARTPTS[a{i}]")
         audio_parts.append("".join(f"[a{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[aorig]")
         speech_label = "aorig"
 
@@ -168,9 +166,7 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
         if job.loudness_lufs is not None:
             # Chuẩn giao: âm lượng tích hợp theo LUFS, đỉnh thực -1,5 dBTP để không xén khi nén lại.
             loud = f",loudnorm=I={job.loudness_lufs:.1f}:TP=-1.5:LRA=11"
-        audio_parts.append(
-            f"[{final_audio}]atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS{loud}[afinal]"
-        )
+        audio_parts.append(f"[{final_audio}]atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS{loud}[afinal]")
         final_audio = "afinal"
 
     graph = ";\n".join(parts + audio_parts)

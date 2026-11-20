@@ -72,9 +72,7 @@ def profile_videos(videos: list[Path], out: Path, settings: Settings, with_speec
         )
     summary = {
         "videos": len(items),
-        "cuts_per_10s_median": round(statistics.median(i["cuts_per_10s"] for i in items), 2)
-        if items
-        else None,
+        "cuts_per_10s_median": round(statistics.median(i["cuts_per_10s"] for i in items), 2) if items else None,
         "shot_median_s": round(statistics.median(i["shot_median_s"] for i in items if i["shot_median_s"]), 2)
         if any(i["shot_median_s"] for i in items)
         else None,
