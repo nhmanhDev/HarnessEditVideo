@@ -180,13 +180,16 @@ def plan_with_model(settings: Settings, ctx: JobContext) -> EditPlan:
     return plan
 
 
-def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan) -> RunResult:
+def render_plan(settings: Settings, ctx: JobContext, plan: EditPlan, refined: bool = False) -> RunResult:
+    """refined=True: đoạn cắt đã được model chọn lại bằng ảnh dày, không dịch lại theo số đo."""
     ffmpeg = require_tool(settings.ffmpeg)
     job_dir = ctx.job_dir
     tracks = load_tracks(settings.music_dir)
     boundaries = [c["end"] for c in ctx.clips[:-1]]
     detail_file = ctx.job_dir / "detail.json"
     detail = [(t, s) for t, s in json.loads(detail_file.read_text(encoding="utf-8"))] if detail_file.exists() else None
+    if refined:
+        detail = None
     motion_file = ctx.job_dir / "motion.json"
     motion = [(t, m) for t, m in json.loads(motion_file.read_text(encoding="utf-8"))] if motion_file.exists() else None
     holds_file = ctx.job_dir / "holds.json"

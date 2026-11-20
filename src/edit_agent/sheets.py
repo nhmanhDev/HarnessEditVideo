@@ -19,13 +19,14 @@ def make_sheet(
     tile_w: int = 240,
     cols: int = 6,
     start: float = 0.0,
+    min_interval: float = 0.5,
 ) -> str:
     """Tạo ảnh lưới khung hình từ `duration` giây của video bắt đầu ở `start`; mỗi ô ghi thời điểm (giây).
 
     Nhãn thời gian luôn là thời điểm trong video gốc (đã cộng `start`). ffmpeg chạy với cwd = thư mục job,
     nên mọi đường dẫn là tương đối (font.ttf nằm trong thư mục job).
     """
-    interval = max(duration / max_frames, 0.5)
+    interval = max(duration / max_frames, min_interval)
     frames = max(1, math.ceil(duration / interval))
     rows = max(1, math.ceil(frames / cols))
     label = (

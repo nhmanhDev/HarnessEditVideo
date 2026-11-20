@@ -15,6 +15,7 @@ from .llm import Backend, LLMError
 from .pipeline import JobContext, prepare, render_plan
 from .planner import PlannerError, build_packet, extract_json_object
 from .qa import Measure, judge, measure
+from .refine import refine_segments
 from .sheets import make_sheet, make_source_sheets
 from .spec import EditPlan, JobSpec, JobType
 
@@ -153,7 +154,8 @@ def run_agent(
     expect_audio = spec.job_type == JobType.SPEECH_CAPTION
 
     for i in range(rounds + 1):
-        result = render_plan(settings, ctx, plan)
+        plan = refine_segments(backend, ctx, settings, plan)
+        result = render_plan(settings, ctx, plan, refined=True)
         m = judge(measure(settings, result.output), expect_audio=expect_audio)
         saved = ctx.job_dir / f"final_r{i}.mp4"
         shutil.copy2(result.output, saved)

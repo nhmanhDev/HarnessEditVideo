@@ -111,6 +111,36 @@ def _cmd_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_refine(args: argparse.Namespace) -> int:
+    """Chọn lại các đoạn cắt của một kế hoạch bằng ảnh dày, dựng lại và ghi final.mp4 trong job."""
+    import shutil
+
+    from .llm import make_backend
+    from .pipeline import render_plan
+    from .refine import refine_segments, save_plan
+
+    settings = load_settings()
+    job_dir = Path(args.job)
+    ctx = load_context(job_dir)
+    plan = plan_from_file(Path(args.plan) if args.plan else job_dir / "plan.json")
+    backend = make_backend(
+        args.backend or settings.planner_backend,
+        claude_bin=settings.claude_bin,
+        claude_model=settings.claude_model,
+        command=settings.planner_cmd,
+    )
+    if not (job_dir / "font.ttf").exists() and settings.font_file:
+        shutil.copy2(settings.font_file, job_dir / "font.ttf")
+    new_plan = refine_segments(backend, ctx, settings, plan)
+    for a, b in zip(plan.segments, new_plan.segments, strict=False):
+        print(f"{a.src_start:.2f}-{a.src_end:.2f} -> {b.src_start:.2f}-{b.src_end:.2f}")
+    save_plan(job_dir, "plan_refined.json", new_plan)
+    result = render_plan(settings, ctx, new_plan, refined=True)
+    save_plan(job_dir, "plan.json", result.plan)
+    print(f"Đã dựng: {result.output}")
+    return 0
+
+
 def _cmd_review(args: argparse.Namespace) -> int:
     """Cho model chấm một bản đã dựng trong job (final.mp4 và plan.json), không dựng lại."""
     from .agent import review
@@ -253,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
     review_p.add_argument("--plan", default=None, help="Mặc định: plan.json trong thư mục job")
     review_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
     review_p.set_defaults(func=_cmd_review)
+
+    refine_p = sub.add_parser("refine", help="Model chọn lại từng đoạn cắt bằng ảnh dày rồi dựng lại")
+    refine_p.add_argument("--job", required=True)
+    refine_p.add_argument("--plan", default=None, help="Mặc định: plan.json trong thư mục job")
+    refine_p.add_argument("--backend", choices=["claude-cli", "anthropic", "command"], default=None)
+    refine_p.set_defaults(func=_cmd_refine)
 
     qa_p = sub.add_parser("qa", help="Đo chất lượng video bằng số: âm lượng, khung đen, đứng hình, nhịp cắt")
     qa_p.add_argument("files", nargs="+")
