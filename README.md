@@ -29,6 +29,12 @@ uv run edit-agent run --input "<link hoặc đường dẫn>" --type text_music
 uv run edit-agent run --input "<link hoặc đường dẫn>" --type speech_music_caption --captions --language vi
 ```
 
+Kiểm chất lượng bằng số (âm lượng, đỉnh, im lặng, khung đen, đứng hình, nhịp cắt). Chi tiết ngưỡng và số đo mẫu: [docs/QA.md](docs/QA.md):
+
+```sh
+uv run edit-agent qa "<file mp4>" --out workspace/qa/bao-cao.json
+```
+
 Chạy với kế hoạch có sẵn (bỏ qua Claude, dùng để kiểm thử):
 
 ```sh

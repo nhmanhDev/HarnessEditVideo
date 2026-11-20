@@ -23,9 +23,9 @@ def test_job_type_values_match_cli_choices():
     assert JobType("speech_music_caption") is JobType.SPEECH_CAPTION
 
 
-def test_job_spec_defaults_to_vertical_reel():
+def test_job_spec_defaults_to_reel_size():
     spec = JobSpec(input="x.mp4", job_type=JobType.TEXT_MUSIC)
-    assert (spec.width, spec.height, spec.fps) == (1080, 1920, 30)
+    assert (spec.width, spec.height, spec.fps) == (1440, 2560, 30)
 
 
 def test_drive_link_detection():

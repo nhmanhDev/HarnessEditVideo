@@ -46,19 +46,24 @@ class Settings:
         return self.workspace / "jobs"
 
 
+def _env(name: str, default: str) -> str:
+    """Biến rỗng được coi như chưa đặt, dùng giá trị mặc định."""
+    return os.environ.get(name, "").strip() or default
+
+
 def load_settings(env_file: Path | None = None) -> Settings:
     load_dotenv(env_file or REPO_ROOT / ".env")
-    workspace = Path(os.environ.get("EDIT_WORKSPACE", REPO_ROOT / "workspace"))
-    font_env = os.environ.get("FONT_FILE")
+    workspace = Path(_env("EDIT_WORKSPACE", str(REPO_ROOT / "workspace")))
+    font_env = _env("FONT_FILE", "")
     font = Path(font_env) if font_env else next((p for p in _font_candidates() if p.exists()), None)
     return Settings(
         workspace=workspace,
-        ffmpeg=os.environ.get("FFMPEG_BIN", "ffmpeg"),
-        ffprobe=os.environ.get("FFPROBE_BIN", "ffprobe"),
-        edit_model=os.environ.get("EDIT_MODEL", "claude-sonnet-5-5"),
-        whisper_model=os.environ.get("WHISPER_MODEL", "small"),
-        tts_provider=os.environ.get("TTS_PROVIDER", "openai"),
-        tts_voice=os.environ.get("TTS_VOICE", "alloy"),
+        ffmpeg=_env("FFMPEG_BIN", "ffmpeg"),
+        ffprobe=_env("FFPROBE_BIN", "ffprobe"),
+        edit_model=_env("EDIT_MODEL", "claude-sonnet-5-5"),
+        whisper_model=_env("WHISPER_MODEL", "small"),
+        tts_provider=_env("TTS_PROVIDER", "voicestudio"),
+        tts_voice=_env("TTS_VOICE", ""),
         font_file=font,
     )
 

@@ -82,6 +82,51 @@ def build_content(
     return content
 
 
+def build_packet(
+    spec: JobSpec,
+    src_duration: float,
+    speech: list[Span],
+    transcript: list[TranscriptSegment],
+    tracks: list[str],
+) -> str:
+    """Gói thông tin dạng văn bản (packet.md) để người hoặc agent khác lập plan.json mà không cần API.
+
+    Cùng nội dung với lời gọi model; khung hình nằm trong frames/, danh sách ở frames.json.
+    """
+    system = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    info = {
+        "loai": spec.job_type.value,
+        "phu_de": spec.captions,
+        "gioi_han_giay": spec.max_output_seconds,
+        "kich_thuoc": f"{spec.width}x{spec.height}",
+        "do_dai_nguon_giay": round(src_duration, 2),
+        "ghi_chu_phong_cach": spec.style_notes,
+        "nhac_co_giay_phep": tracks,
+    }
+    lines = [f"[{s.start:.1f}–{s.end:.1f}s] {s.text}" for s in transcript]
+    return "\n".join(
+        [
+            "# Gói lập kế hoạch dựng",
+            "",
+            "Đọc hướng dẫn dưới đây, xem các khung hình trong thư mục frames/ (danh sách trong frames.json),",
+            "rồi viết plan.json đúng định dạng. Chạy: edit-agent render --job <thư mục job> --planner manual",
+            "",
+            "## Thông tin đầu vào",
+            "```json",
+            json.dumps(info, ensure_ascii=False, indent=2),
+            "```",
+            "",
+            f"Khoảng có lời gốc trong video nguồn: {_fmt_spans(speech)}",
+            "",
+            "## Transcript (thời gian theo video nguồn)",
+            "\n".join(lines) if lines else "(không có lời)",
+            "",
+            "## Hướng dẫn lập kế hoạch (cùng nội dung gửi cho model)",
+            system,
+        ]
+    )
+
+
 def plan_edit(
     client,
     model: str,

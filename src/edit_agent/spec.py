@@ -18,9 +18,13 @@ class JobType(StrEnum):
 class JobSpec(BaseModel):
     input: str = Field(description="Link Google Drive công khai hoặc đường dẫn file cục bộ")
     job_type: JobType
-    width: int = 1080
-    height: int = 1920
+    # 1440x2560: kích thước các reel mẫu đạt (đo 2026-11-20).
+    width: int = 1440
+    height: int = 2560
     fps: int = 30
+    fit: Literal["blur", "crop"] = Field(
+        default="blur", description="Khung ngang: nền mờ (giữ hình) hoặc cắt giữa"
+    )
     captions: bool = False
     max_output_seconds: float = Field(default=60.0, gt=0)
     language: str | None = Field(default=None, description="Mã ngôn ngữ nói, ví dụ vi; để trống thì tự nhận")

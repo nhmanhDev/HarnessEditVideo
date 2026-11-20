@@ -37,6 +37,12 @@ class RenderJob:
     music_volume: float = 0.25
     font_file: str | None = None  # ví dụ font.ttf
     output: str = "final.mp4"
+    # "blur": giữ toàn bộ khung, nền mờ (không mất hai bên khi cắt từ video ngang). "crop": lấp đầy, cắt bớt.
+    fit: str = "blur"
+    # Âm lượng giao (LUFS tích hợp). None = không chuẩn hoá. Reel mẫu đạt đều ở -14.
+    loudness_lufs: float | None = -14.0
+    music_fade_in_s: float = 0.5
+    music_fade_out_s: float = 1.5
 
 
 def _wrap(text: str, vertical: bool) -> str:
@@ -53,11 +59,21 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
     n = len(job.pieces)
 
     for i, p in enumerate(job.pieces):
-        parts.append(
-            f"[0:v]trim=start={p.src_start:.3f}:end={p.src_end:.3f},setpts=PTS-STARTPTS,"
-            f"scale={job.width}:{job.height}:force_original_aspect_ratio=increase,"
-            f"crop={job.width}:{job.height},setsar=1,fps={job.fps}[v{i}]"
-        )
+        trim = f"[0:v]trim=start={p.src_start:.3f}:end={p.src_end:.3f},setpts=PTS-STARTPTS"
+        if job.fit == "blur":
+            # Nền: phóng to lấp khung rồi làm mờ. Lớp trước: cả khung nguồn, vừa chiều rộng, đặt giữa.
+            parts.append(
+                f"{trim},split=2[bgs{i}][fgs{i}];"
+                f"[bgs{i}]scale={job.width}:{job.height}:force_original_aspect_ratio=increase,"
+                f"crop={job.width}:{job.height},boxblur=24:2[bg{i}];"
+                f"[fgs{i}]scale={job.width}:-2[fg{i}];"
+                f"[bg{i}][fg{i}]overlay=(W-w)/2:(H-h)/2,setsar=1,fps={job.fps}[v{i}]"
+            )
+        else:
+            parts.append(
+                f"{trim},scale={job.width}:{job.height}:force_original_aspect_ratio=increase,"
+                f"crop={job.width}:{job.height},setsar=1,fps={job.fps}[v{i}]"
+            )
     parts.append("".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[vc]")
 
     current = "vc"
@@ -128,9 +144,12 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
 
     music_label: str | None = None
     if music_index is not None:
+        out_end = max(0.0, job.output_seconds - job.music_fade_out_s)
         audio_parts.append(
             f"[{music_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS,volume={job.music_volume:.3f}[mus]"
+            f"atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS,volume={job.music_volume:.3f},"
+            f"afade=t=in:st=0:d={job.music_fade_in_s:.2f},"
+            f"afade=t=out:st={out_end:.3f}:d={job.music_fade_out_s:.2f}[mus]"
         )
         music_label = "mus"
 
@@ -146,7 +165,13 @@ def build_filter_graph(job: RenderJob) -> tuple[str, str | None, str | None]:
         final_audio = music_label
 
     if final_audio:
-        audio_parts.append(f"[{final_audio}]atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS[afinal]")
+        loud = ""
+        if job.loudness_lufs is not None:
+            # Chuẩn giao: âm lượng tích hợp theo LUFS, đỉnh thực -1,5 dBTP để không xén khi nén lại.
+            loud = f",loudnorm=I={job.loudness_lufs:.1f}:TP=-1.5:LRA=11"
+        audio_parts.append(
+            f"[{final_audio}]atrim=0:{job.output_seconds:.3f},asetpts=PTS-STARTPTS{loud}[afinal]"
+        )
         final_audio = "afinal"
 
     graph = ";\n".join(parts + audio_parts)
