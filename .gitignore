@@ -1,0 +1,12 @@
+# Môi trường và cache
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Dữ liệu chạy: video, khung hình, phiên âm, kết quả dựng, nhạc. Không đưa vào Git.
+workspace/
+
+# Bí mật
+.env

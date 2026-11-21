@@ -1,0 +1,8 @@
+# Cập nhật phụ thuộc tự động. Chỉ giữ hệ sinh thái đang có trong repo (GitHub Actions).
+# Khi thêm uv, npm hoặc docker thì thêm khối tương ứng.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
