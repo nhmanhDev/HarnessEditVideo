@@ -1,0 +1,63 @@
+from edit_agent.policy import uncovered_seconds
+from edit_agent.select import pick_windows
+from edit_agent.spec import VoiceLine
+
+
+def test_uncovered_counts_tail_and_gaps():
+    lines = [VoiceLine(text="a", start=0.1, end=3.0), VoiceLine(text="b", start=6.0, end=8.0)]
+    # Phủ 2,9 + 2,0 = 4,9 giây trên 13,2 giây; khoảng không lời = 8,3 giây.
+    assert round(uncovered_seconds(lines, 13.2), 2) == 8.3
+
+
+def test_uncovered_is_zero_when_voice_covers_all():
+    lines = [VoiceLine(text="a", start=0, end=5), VoiceLine(text="b", start=4.5, end=10)]
+    assert uncovered_seconds(lines, 10.0) == 0.0
+
+
+def test_pick_windows_prefers_high_detail_and_spreads_out():
+    # Điểm thấp ở đầu, cao ở giữa và cuối.
+    scores = [(i * 0.5, 1.0 if i < 10 else 9.0) for i in range(40)]
+    wins = pick_windows(scores, 3, 2.0, 20.0, min_gap=0.5)
+    assert len(wins) == 3
+    assert all(w.start >= 5.0 for w in wins)
+    assert all(wins[i].end + 0.5 <= wins[i + 1].start for i in range(len(wins) - 1))
+
+
+def test_pick_windows_prefers_steady_over_sliding_frames():
+    import numpy as np
+
+    # 20 mẫu cách 0,5 giây, chi tiết bằng nhau. Đoạn 0–4,5 giây đứng yên; đoạn 5–9,5 giây biến đổi mạnh.
+    scores = [(i * 0.5, 10.0) for i in range(20)]
+    sigs = np.zeros((20, 8), dtype=np.float32)
+    for i in range(10, 20):
+        sigs[i] = (i % 2) * 60.0  # nhảy mạnh giữa hai khung liền nhau
+    wins = pick_windows(scores, 1, 2.0, 10.0, sigs=sigs, min_diff=0.0, motion_ref=3.0)
+    assert len(wins) == 1
+    assert wins[0].start < 5.0
+
+
+def test_presence_scores_separate_empty_background_from_product_frames():
+    import numpy as np
+
+    from edit_agent.select import presence_scores
+
+    scores = [(i * 0.5, 9.0) for i in range(12)]  # Laplacian gần như bằng nhau (rèm cũng có nếp gấp)
+    sigs = np.full((12, 8), 100.0, dtype=np.float32)
+    for i in (2, 3, 4, 5, 6):  # sản phẩm hiện ở các mẫu 2–6
+        sigs[i, :4] += 40.0
+    out = presence_scores(scores, sigs)
+    values = [v for _, v in out]
+    assert max(values[0], values[1], values[9], values[10]) < 5.0  # rèm trống: thấp
+    assert min(values[3], values[4], values[5]) > 10.0  # có sản phẩm: cao
+
+
+def test_presence_uses_a_separate_background_for_each_clip():
+    import numpy as np
+
+    from edit_agent.select import presence_scores
+
+    scores = [(i * 0.5, 9.0) for i in range(8)]
+    sigs = np.zeros((8, 4), dtype=np.float32)
+    sigs[4:] = 200.0  # clip thứ hai có phông sáng hơn hẳn
+    out = presence_scores(scores, sigs, boundaries=[2.0])
+    assert all(v < 1.0 for _, v in out)
