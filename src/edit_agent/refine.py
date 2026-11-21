@@ -29,8 +29,10 @@ Với mỗi đoạn, chọn `src_start` sao cho toàn bộ cửa sổ [src_start
 4. Món trong cửa sổ đúng là món đang được nhắc trong `mo_ta` của đoạn (nếu có).
 Ưu tiên cửa sổ mà sản phẩm ở giữa khung. Chỉ chọn thời điểm có trong ảnh lưới. Độ dài cửa sổ giữ NGUYÊN theo `do_dai`.
 Nếu không có cửa sổ nào hoàn hảo, chọn cửa sổ ít lỗi nhất.
+Đồng thời chọn `vi_tri_chu` cho đoạn: "top" hoặc "bottom", là nửa khung có nền trống để chữ KHÔNG đè lên sản phẩm
+hay chữ in sẵn (biển hiệu, banner, chữ trên áo); nếu cả hai nửa đều có chữ in sẵn thì chọn nửa ít chữ hơn.
 Trả về DUY NHẤT một JSON, đủ mọi đoạn, đúng thứ tự `i`:
-{"segments":[{"i":0,"src_start":12.3,"ghi_chu":"lý do ngắn"}, ...]}"""
+{"segments":[{"i":0,"src_start":12.3,"vi_tri_chu":"bottom","ghi_chu":"lý do ngắn"}, ...]}"""
 
 
 def _clip_bounds(ctx: JobContext, t: float) -> tuple[float, float]:
@@ -48,8 +50,13 @@ def _describe(plan: EditPlan, i: int) -> str:
     return "; ".join(names)
 
 
-def refine_segments(backend: Backend, ctx: JobContext, settings: Settings, plan: EditPlan) -> EditPlan:
-    """Trả kế hoạch mới với src_start từng đoạn được chọn lại; lỗi thì giữ nguyên kế hoạch."""
+def refine_segments(
+    backend: Backend, ctx: JobContext, settings: Settings, plan: EditPlan, place_texts: bool = True
+) -> EditPlan:
+    """Trả kế hoạch mới với src_start từng đoạn được chọn lại; lỗi thì giữ nguyên kế hoạch.
+
+    place_texts=False: giữ nguyên vị trí chữ (kế hoạch đã được critic sửa, không ghi đè quyết định của nó).
+    """
     rows: list[dict] = []
     sheets: list[str] = []
     bounds: list[tuple[float, float]] = []
@@ -86,7 +93,9 @@ def refine_segments(backend: Backend, ctx: JobContext, settings: Settings, plan:
     prompt += json.dumps(rows, ensure_ascii=False, indent=2)
     try:
         text = backend.complete(prompt, sheets, ctx.job_dir)
-        picked = {int(d["i"]): float(d["src_start"]) for d in extract_json_object(text)["segments"]}
+        data = extract_json_object(text)["segments"]
+        picked = {int(d["i"]): float(d["src_start"]) for d in data}
+        places = {int(d["i"]): d.get("vi_tri_chu") for d in data if d.get("vi_tri_chu") in ("top", "bottom")}
     except (LLMError, PlannerError, KeyError, ValueError, TypeError) as exc:
         print(f"Cảnh báo: không chọn lại được đoạn ({exc}); giữ kế hoạch cũ", file=sys.stderr)
         return plan
@@ -97,7 +106,23 @@ def refine_segments(backend: Backend, ctx: JobContext, settings: Settings, plan:
         start = picked.get(i, seg.src_start)
         start = min(max(start, lo, rows[i]["pham_vi_cho_phep"][0]), min(hi, rows[i]["pham_vi_cho_phep"][1]) - length)
         new.append(Segment(src_start=round(start, 3), src_end=round(start + length, 3)))
-    return plan.model_copy(update={"segments": new})
+    texts = _place_texts(plan, places) if place_texts else plan.texts
+    return plan.model_copy(update={"segments": new, "texts": texts})
+
+
+def _place_texts(plan: EditPlan, places: dict[int, str]) -> list:
+    """Đặt lại vị trí chữ theo nửa khung model chọn cho đoạn chứa chữ đó (theo timeline lý tưởng)."""
+    edges, t = [], 0.0
+    for s in plan.segments:
+        edges.append((t, t + s.src_end - s.src_start))
+        t = edges[-1][1]
+    out = []
+    for text in plan.texts:
+        mid = (text.start + text.end) / 2
+        idx = next((i for i, (a, b) in enumerate(edges) if a <= mid < b), None)
+        place = places.get(idx) if idx is not None else None
+        out.append(text.model_copy(update={"position": place}) if place else text)
+    return out
 
 
 def save_plan(job_dir: Path, name: str, plan: EditPlan) -> None:

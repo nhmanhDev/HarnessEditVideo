@@ -8,7 +8,7 @@ Agent dựng video dọc (reel) từ một video nguồn: đọc nội dung, l�
 - **Loại 1 (`text_music`)**: chữ trên video và nhạc nền, không có lời.
 - **Loại 2 (`speech_music_caption`)**: giữ lời gốc, nhạc nền, và phụ đề tuỳ chọn.
 
-> Trạng thái: bản thử đầu tiên. Đã kiểm pipeline với kế hoạch viết tay trên video thật. Chưa kiểm lập kế hoạch bằng Claude và lời đọc TTS, vì chưa có khóa API.
+> Trạng thái: prototype đã chạy end-to-end trên video thật. Đã thử lập/chỉnh kế hoạch bằng Claude CLI, TTS, phụ đề, QA và render trên các bộ clip. Điểm chất lượng hiện do model tự chấm; cần người xem đánh giá thêm và thử trên nhiều nguồn hơn.
 
 ## Cài đặt
 Yêu cầu: Python 3.12, [uv](https://docs.astral.sh/uv/), ffmpeg và ffprobe trong PATH.
@@ -46,6 +46,14 @@ Kiểm chất lượng bằng số (âm lượng, đỉnh, im lặng, khung đen
 uv run edit-agent qa "<file mp4>" --out workspace/qa/bao-cao.json
 ```
 
+Chọn lại điểm bắt đầu và vị trí chữ theo ảnh khung hình dày của từng đoạn:
+
+```sh
+uv run edit-agent refine --job "<thư mục job>"
+```
+
+Lệnh `agent` gọi bước refine trong mỗi vòng dựng. Dùng `render --refined` để dựng kế hoạch đã refine mà không áp dụng dịch chuyển đoạn lần nữa.
+
 Chạy với kế hoạch có sẵn (bỏ qua Claude, dùng để kiểm thử):
 
 ```sh
@@ -66,8 +74,8 @@ Mỗi job tạo một thư mục trong `workspace/jobs/`: `final.mp4`, `report.m
 Xem [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Đóng góp & bảo mật
-- Đóng góp: [CONTRIBUTING.md](CONTRIBUTING.md) (khi có)
-- Báo lỗi bảo mật: [SECURITY.md](SECURITY.md) (khi có)
+- Đóng góp: xem hướng dẫn tạo nhánh và PR trong GitHub.
+- Báo lỗi bảo mật: mở issue riêng tư theo tính năng Security của GitHub.
 
 ## License
 Phát hành theo [Apache-2.0](LICENSE).

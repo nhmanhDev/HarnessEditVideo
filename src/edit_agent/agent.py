@@ -154,7 +154,7 @@ def run_agent(
     expect_audio = spec.job_type == JobType.SPEECH_CAPTION
 
     for i in range(rounds + 1):
-        plan = refine_segments(backend, ctx, settings, plan)
+        plan = refine_segments(backend, ctx, settings, plan, place_texts=(i == 0))
         result = render_plan(settings, ctx, plan, refined=True)
         m = judge(measure(settings, result.output), expect_audio=expect_audio)
         saved = ctx.job_dir / f"final_r{i}.mp4"
