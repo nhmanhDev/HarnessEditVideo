@@ -24,7 +24,7 @@ Một object JSON duy nhất:
 {
   "score": 6,
   "issues": ["mô tả ngắn từng lỗi cụ thể, kèm thời điểm"],
-  "plan": { ...kế hoạch đầy đủ đã sửa... } 
+  "plan": { ...kế hoạch đầy đủ đã sửa... }
 }
 ```
 
